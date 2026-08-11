@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pocket-Money — Interactive Prototype (v0.1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Pocket-Money prototype — design tokens
+   Surface map: Parent dashboard = Operate · Child home = Monitor
+   Login/onboarding = Configure
+   ============================================================ */
+:root{
+  --paper:#f6f4ee;
+  --surface:#ffffff;
+  --ink:#1f2b26;
+  --muted:#6b7a72;
+  --line:#e3ded2;
+  --accent:#166b43;
+  --accent-ink:#0f5132;
+  --accent-soft:#e4f0e8;
+  --credit:#147047;
+  --debit:#c23d3d;
+  --debit-soft:#fbeaea;
+  --danger:#c23d3d;
+  --kid-bg:#eef6f0;
+  --r-card:14px;
+  --r-btn:12px;
+  --shadow:0 1px 2px rgba(31,43,38,.06),0 6px 20px -8px rgba(31,43,38,.14);
+  font-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:#e8e5dc;color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+.money, .mono{font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:.04em}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font:inherit;color:inherit}
+
+/* ---------- App column (phone-first) ---------- */
+.app{
+  max-width:430px;margin:0 auto;min-height:100dvh;
+  background:var(--paper);position:relative;
+  display:flex;flex-direction:column;
+}
+@media (min-width:520px){
+  .app{box-shadow:0 0 0 1px var(--line),0 24px 60px -20px rgba(31,43,38,.35)}
+}
+.screen{display:none;flex-direction:column;flex:1;padding-bottom:64px}
+.screen.active{display:flex}
+
+/* ---------- Top bar ---------- */
+.topbar{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 18px 10px;
+  position:sticky;top:0;background:var(--paper);z-index:20;
+}
+.topbar h1{font-size:1.05rem;font-weight:800;flex:1}
+.topbar .sub{font-size:.78rem;color:var(--muted);font-weight:600}
+.iconbtn{
+  width:40px;height:40px;border-radius:10px;display:grid;place-items:center;
+  color:var(--accent-ink);background:var(--accent-soft);font-weight:800;
+}
+.iconbtn:active{transform:scale(.96)}
+.lockchip{
+  font-size:.72rem;font-weight:700;color:var(--muted);
+  background:var(--surface);border:1px solid var(--line);
+  padding:4px 8px;border-radius:99px;white-space:nowrap;
+}
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:48px;padding:10px 18px;border-radius:var(--r-btn);
+  font-weight:800;font-size:.95rem;transition:transform .06s;
+}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-soft{background:var(--accent-soft);color:var(--accent-ink)}
+.btn-ghost{background:var(--surface);border:1.5px solid var(--line);color:var(--ink)}
+.btn-danger{background:var(--debit-soft);color:var(--debit)}
+.btn-block{width:100%}
+.btn-sm{min-height:40px;padding:6px 12px;font-size:.85rem;border-radius:10px}
+
+/* ---------- Cards & sections ---------- */
+.section{padding:6px 18px}
+.section-label{
+  font-size:.72rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);margin:16px 0 8px;
+}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow)}
+.pad{padding:16px}
+
+/* Child card on parent dashboard */
+.child-card{padding:14px 16px;margin-bottom:10px}
+.child-row{display:flex;align-items:center;gap:12px}
+.avatar{
+  width:44px;height:44px;border-radius:50%;flex:none;
+  background:var(--accent-soft);color:var(--accent-ink);
+  display:grid;place-items:center;font-weight:800;font-size:1.05rem;
+}
+.child-meta{flex:1;min-width:0}
+.child-name{font-weight:800;font-size:1rem;line-height:1.15}
+.acct-chip{
+  display:inline-block;margin-top:2px;font-size:.72rem;font-weight:700;
+  color:var(--muted);background:var(--paper);border:1px solid var(--line);
+  padding:2px 7px;border-radius:6px;
+}
+.child-balance{font-weight:800;font-size:1.12rem;text-align:right;white-space:nowrap}
+.child-actions{display:flex;gap:8px;margin-top:12px}
+.child-actions .btn{flex:1}
+
+/* ---------- Forms ---------- */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.82rem;font-weight:800;margin-bottom:6px;color:var(--ink)}
+.field input,.field select{
+  width:100%;min-height:48px;padding:10px 12px;border-radius:10px;
+  border:1.5px solid var(--line);background:var(--surface);outline:none;
+}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.hint{font-size:.78rem;color:var(--muted);margin-top:5px;font-weight:600}
+.err{font-size:.82rem;color:var(--debit);font-weight:700;margin-top:8px;display:none}
+.err.show{display:block}
+
+/* ---------- Segmented control ---------- */
+.segmented{display:flex;background:var(--paper);border:1.5px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.segmented button{
+  flex:1;min-height:42px;border-radius:9px;font-weight:800;color:var(--muted);font-size:.92rem;
+}
+.segmented button.on-credit{background:var(--accent);color:#fff}
+.segmented button.on-debit{background:var(--debit);color:#fff}
+
+/* ---------- PIN pad ---------- */
+.pindots{display:flex;gap:14px;justify-content:center;margin:18px 0}
+.pindots span{
+  width:16px;height:16px;border-radius:50%;border:2.5px solid var(--accent);
+  transition:background .12s;
+}
+.pindots span.filled{background:var(--accent)}
+.pindots.err span{border-color:var(--debit)}
+.pindots.err span.filled{background:var(--debit)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:280px;margin:0 auto}
+.keypad button{
+  min-height:56px;border-radius:14px;background:var(--surface);
+  border:1px solid var(--line);font-size:1.25rem;font-weight:800;
+}
+.keypad button:active{background:var(--accent-soft)}
+.keypad .k-ghost{background:transparent;border-color:transparent;font-size:.85rem;color:var(--muted)}
+
+/* ---------- Timeline (child home) ---------- */
+.tl{list-style:none}
+.tl-item{
+  display:flex;gap:12px;align-items:flex-start;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);
+  padding:13px 14px;margin-bottom:9px;box-shadow:var(--shadow);
+}
+.tl-mark{
+  width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;
+  font-weight:800;font-size:1.05rem;margin-top:2px;
+}
+.tl-mark.credit{background:var(--accent-soft);color:var(--credit)}
+.tl-mark.debit{background:var(--debit-soft);color:var(--debit)}
+.tl-body{flex:1;min-width:0}
+.tl-reason{font-weight:800;font-size:.95rem;line-height:1.25}
+.tl-date{font-size:.75rem;color:var(--muted);font-weight:600;margin-top:2px}
+.tl-after{font-size:.75rem;color:var(--muted);font-weight:600;margin-top:3px}
+.tl-amt{text-align:right;white-space:nowrap}
+.tl-amt .amt{font-weight:800;font-size:1.02rem}
+.tl-amt .amt.credit{color:var(--credit)}
+.tl-amt .amt.debit{color:var(--debit)}
+
+/* ---------- Modals ---------- */
+.overlay{
+  position:fixed;inset:0;background:rgba(31,43,38,.5);
+  display:none;align-items:flex-end;justify-content:center;z-index:100;
+}
+.overlay.open{display:flex}
+.modal{
+  background:var(--surface);width:100%;max-width:430px;
+  border-radius:20px 20px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  max-height:88dvh;overflow-y:auto;animation:up .18s ease-out;
+}
+@keyframes up{from{transform:translateY(28px);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.modal{animation:none}}
+.modal h2{font-size:1.1rem;font-weight:800;margin-bottom:4px}
+.modal .msub{font-size:.84rem;color:var(--muted);font-weight:600;margin-bottom:14px}
+.modal-close{
+  position:sticky;top:0;float:right;width:36px;height:36px;border-radius:10px;
+  background:var(--paper);font-weight:800;color:var(--muted);
+}
+
+/* ---------- Toast ---------- */
+#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:70px;z-index:200;display:flex;flex-direction:column;gap:8px;width:min(400px,92vw)}
+.toast{
+  background:var(--ink);color:#fff;padding:12px 16px;border-radius:12px;
+  font-size:.86rem;font-weight:700;box-shadow:var(--shadow);animation:up .18s ease-out;
+}
+.toast small{display:block;font-weight:600;opacity:.75;margin-top:2px;font-size:.75rem}
+
+/* ---------- Landing & auth ---------- */
+.hero{padding:56px 24px 20px;text-align:left}
+.hero .brand{font-size:2rem;font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.hero .tagline{color:var(--muted);font-weight:600;margin-top:8px;font-size:.95rem}
+.role-btn{
+  display:flex;align-items:center;gap:14px;width:100%;
+  background:var(--surface);border:1.5px solid var(--line);border-radius:16px;
+  padding:16px;margin-bottom:12px;box-shadow:var(--shadow);text-align:left;
+}
+.role-btn:active{transform:scale(.99)}
+.role-btn .avatar{width:48px;height:48px;font-size:1.3rem}
+.role-btn b{display:block;font-size:1.02rem}
+.role-btn span{font-size:.8rem;color:var(--muted);font-weight:600}
+.proto-note{margin:26px 24px 0;font-size:.74rem;color:var(--muted);font-weight:600;line-height:1.5}
+.demo-creds{
+  background:var(--accent-soft);border-radius:10px;padding:10px 12px;
+  font-size:.78rem;font-weight:700;color:var(--accent-ink);margin-bottom:16px;line-height:1.5;
+}
+
+/* ---------- Child home ---------- */
+#screen-child-home{background:var(--kid-bg)}
+.balance-hero{
+  margin:6px 18px 14px;background:var(--accent);color:#fff;
+  border-radius:22px;padding:26px 22px;box-shadow:var(--shadow);
+}
+.balance-hero .lbl{font-size:.8rem;font-weight:700;opacity:.85;letter-spacing:.05em;text-transform:uppercase}
+.balance-hero .amt{font-size:2.9rem;font-weight:800;letter-spacing:-.02em;margin-top:6px;font-variant-numeric:tabular-nums}
+.balance-hero .who{margin-top:8px;font-size:.88rem;font-weight:700;opacity:.9}
+.kid-actions{display:flex;gap:10px;margin:0 18px 6px}
+.kid-actions .btn{flex:1}
+
+/* ---------- Onboarding steps ---------- */
+.steps{display:flex;gap:6px;padding:0 18px;margin-bottom:16px}
+.steps span{flex:1;height:5px;border-radius:99px;background:var(--line)}
+.steps span.done{background:var(--accent)}
+
+/* ---------- Dev toolbar ---------- */
+#devbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:90;
+  background:#22302a;color:#cfe0d6;display:flex;align-items:center;gap:8px;
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+  font-size:.75rem;font-weight:700;flex-wrap:wrap;justify-content:center;
+}
+#devbar b{letter-spacing:.08em;font-size:.68rem;opacity:.7;margin-right:2px}
+#devbar button{
+  background:#33453c;color:#e7f2ec;border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:800;
+}
+#devbar button:active{background:#42574c}
+
+.balance-preview{
+  background:var(--paper);border-radius:10px;padding:10px 12px;margin:6px 0 14px;
+  font-size:.88rem;font-weight:700;display:flex;justify-content:space-between;
+}
+.cred-view{background:var(--paper);border:1.5px dashed var(--line);border-radius:14px;padding:16px;margin:14px 0}
+.cred-view .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0}
+.cred-view .row b{font-size:1.15rem}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================= LANDING ================= -->
+  <section class="screen" id="screen-landing">
+    <div class="hero">
+      <div class="brand">Pocket-Money</div>
+      <div class="tagline">The family allowance ledger. Parents log it, kids watch it grow.</div>
+    </div>
+    <div class="section">
+      <button class="role-btn" onclick="goParentEntry()">
+        <span class="avatar">P</span>
+        <span><b>I'm a Parent</b><span>Manage balances, log allowance &amp; chores</span></span>
+      </button>
+      <button class="role-btn" onclick="goChildEntry()">
+        <span class="avatar">K</span>
+        <span><b>I'm a Kid</b><span>Check my balance and history</span></span>
+      </button>
+    </div>
+    <p class="proto-note">Interactive prototype · v0.1 · demo data only.<br>Covers: dual-role auth, parent PIN guard, 365-day child session, atomic ledger, inactivity lock.</p>
+  </section>
+
+  <!-- ================= PARENT LOGIN (Firebase mock) ================= -->
+  <section class="screen" id="screen-parent-login">
+    <div class="topbar"><button class="iconbtn" onclick="go('landing')">←</button><h1>Parent sign-in</h1></div>
+    <div class="section">
+      <div class="card pad">
+        <div class="field"><label>Email</label><input id="pl-email" type="email" value="tohid@example.com" autocomplete="off"></div>
+        <div class="field"><label>Password</label><input id="pl-pass" type="password" value="••••••••"></div>
+        <button class="btn btn-primary btn-block" onclick="parentSignIn()">Sign in</button>
+        <div style="text-align:center;margin:12px 0;font-size:.78rem;color:var(--muted);font-weight:700">or</div>
+        <button class="btn btn-ghost btn-block" onclick="parentSignIn()">Continue with Google&nbsp;<span class="mono">SSO</span></button>
+        <p class="hint">Authentication is delegated to <b>Firebase Auth</b> — the API only verifies Firebase ID tokens.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ONBOARDING ================= -->
+  <section class="screen" id="screen-onboarding">
+    <div class="topbar"><h1>Set up your household</h1></div>
+    <div class="steps"><span id="ob-s1" class="done"></span><span id="ob-s2"></span></div>
+    <div class="section" id="ob-step1">
+      <div class="card pad">
+        <div class="field"><label>Household name <span style="color:var(--muted);font-weight:600">(optional)</span></label>
+          <input id="ob-name" placeholder="e.g. The Azizi Family" maxlength="60"></div>
+        <div class="field"><label>Currency symbol</label>
+          <input id="ob-currency" maxlength="3" value="$" class="mono" style="max-width:110px">
+          <div class="hint">Up to 3 characters — $, €, £, ¥ …</div></div>
+        <div class="field"><label>Decimal digits</label>
+          <select id="ob-decimals"><option>0</option><option>1</option><option selected>2</option><option>3</option></select>
+          <div class="hint">How many decimal places amounts show.</div></div>
+        <button class="btn btn-primary btn-block" onclick="obNext()">Continue</button>
+      </div>
+    </div>
+    <div class="section" id="ob-step2" style="display:none">
+      <div class="card pad">
+        <h2 style="font-size:1rem;font-weight:800">Choose your 4-digit Parent PIN</h2>
+        <p class="hint" style="margin:6px 0 4px">Unlocks the Parent Dashboard on shared devices and after 5 minutes of inactivity.</p>
+        <div id="ob-pinwrap"></div>
+        <div class="err" id="ob-err"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PARENT HOME ================= -->
+  <section class="screen" id="screen-parent-home">
+    <div class="topbar">
+      <div style="flex:1">
+        <h1 id="ph-household">Household</h1>
+        <div class="sub" id="ph-parents"></div>
+      </div>
+      <span class="lockchip" id="ph-lockchip" title="Inactivity auto-lock">Lock 5:00</span>
+      <button class="iconbtn" onclick="openSettings()" title="Household settings">⚙</button>
+      <button class="iconbtn" onclick="parentSignOut()" title="Sign out">⎋</button>
+    </div>
+    <div class="section">
+      <button class="btn btn-primary btn-block" style="margin-bottom:4px" onclick="openTxModal()">＋ Log a transaction</button>
+    </div>
+    <div class="section">
+      <div class="section-label">Kids <span id="ph-kidcount" style="text-transform:none;letter-spacing:0"></span></div>
+      <div id="ph-children"></div>
+      <button class="btn btn-ghost btn-block" onclick="openAddChild()" id="ph-addchild">＋ Add a child profile</button>
+    </div>
+    <div class="section">
+      <div class="section-label">Household</div>
+      <div class="card pad" style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-soft btn-sm" onclick="openInvite()">Invite 2nd parent</button>
+        <button class="btn btn-soft btn-sm" onclick="openSettings()">Currency &amp; settings</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHILD LOGIN ================= -->
+  <section class="screen" id="screen-child-login">
+    <div class="topbar"><button class="iconbtn" onclick="go('landing')">←</button><h1>Kid sign-in</h1></div>
+    <div class="section">
+      <div class="demo-creds">Demo accounts — <span class="mono">MJ74K / 1234</span> (Mia) · <span class="mono">LEN2B / 5678</span> (Leo)</div>
+      <div class="card pad">
+        <div class="field"><label>Pocket-Money Account ID</label>
+          <input id="cl-acct" class="mono" maxlength="5" style="text-transform:uppercase;font-size:1.25rem;letter-spacing:.35em;text-align:center;font-weight:800" autocomplete="off" placeholder="•••••">
+          <div class="hint">5 characters, printed on your profile card.</div></div>
+        <label style="display:block;font-size:.82rem;font-weight:800;margin-bottom:2px">4-digit PIN</label>
+        <div id="cl-pinwrap"></div>
+        <div class="err" id="cl-err"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHILD HOME ================= -->
+  <section class="screen" id="screen-child-home">
+    <div class="topbar">
+      <h1 id="ch-hello">Hi!</h1>
+      <span class="lockchip" id="ch-acct"></span>
+    </div>
+    <div class="balance-hero">
+      <div class="lbl">My balance</div>
+      <div class="amt" id="ch-balance"></div>
+      <div class="who" id="ch-household"></div>
+    </div>
+    <div class="section">
+      <div class="section-label">My history — newest first</div>
+      <ul class="tl" id="ch-timeline"></ul>
+    </div>
+    <div class="section kid-actions" style="padding:0 18px">
+      <button class="btn btn-ghost" onclick="requestSwitchToParent()">Switch to Parent</button>
+      <button class="btn btn-ghost" onclick="childLogout()">Log out</button>
+    </div>
+    <p class="hint" style="padding:10px 18px">Your session stays signed in on this device for 365 days — unless a parent resets your PIN.</p>
+  </section>
+</div>
+
+<!-- ================= MODALS ================= -->
+<div class="overlay" id="ov-parent-pin"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-parent-pin')">✕</button>
+  <h2 id="pp-title">Parent PIN required</h2>
+  <p class="msub" id="pp-sub"></p>
+  <div id="pp-pinwrap"></div>
+  <div class="err" id="pp-err"></div>
+</div></div>
+
+<div class="overlay" id="ov-tx"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-tx')">✕</button>
+  <h2>Log a transaction</h2>
+  <p class="msub">Append-only ledger — corrections are new transactions, never edits.</p>
+  <div class="field"><label>Child</label><select id="tx-child"></select></div>
+  <div class="field"><label>Type</label>
+    <div class="segmented">
+      <button id="tx-credit" onclick="setTxType('CREDIT')">＋ Credit (deposit)</button>
+      <button id="tx-debit" onclick="setTxType('DEBIT')">− Debit (spend)</button>
+    </div>
+  </div>
+  <div class="field"><label>Amount</label><input id="tx-amount" inputmode="decimal" placeholder="0.00" style="font-weight:800"></div>
+  <div class="field"><label>Reason</label><input id="tx-reason" maxlength="255" placeholder="e.g. Mowed Lawn"></div>
+  <div class="balance-preview"><span>Balance after</span><b class="money" id="tx-preview">—</b></div>
+  <div class="err" id="tx-err"></div>
+  <button class="btn btn-primary btn-block" onclick="submitTx()">Save transaction</button>
+</div></div>
+
+<div class="overlay" id="ov-addchild"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-addchild')">✕</button>
+  <div id="ac-form">
+    <h2>New child profile</h2>
+    <p class="msub">We generate a 5-character Base-31 Account ID (no O, I, S, U, Q) and a first random PIN.</p>
+    <div class="field"><label>Child's name</label><input id="ac-name" maxlength="100" placeholder="e.g. Mia"></div>
+    <div class="err" id="ac-err"></div>
+    <button class="btn btn-primary btn-block" onclick="createChild()">Create profile</button>
+  </div>
+  <div id="ac-creds" style="display:none">
+    <h2>Profile created ✓</h2>
+    <p class="msub">Write these down — this is the only time the PIN is shown in full.</p>
+    <div class="cred-view">
+      <div class="row"><span class="hint">Account ID (username)</span><b class="mono" id="ac-id"></b></div>
+      <div class="row"><span class="hint">First PIN</span><b class="mono" id="ac-pin"></b></div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="closeModal('ov-addchild');renderParentHome()">Done</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-pinreset"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-pinreset')">✕</button>
+  <h2 id="pr-title">Reset PIN</h2>
+  <p class="msub">Rotates the child's <b>security stamp</b> — every active 365-day session on their devices is invalidated immediately.</p>
+  <div class="field"><label>New 4-digit PIN</label>
+    <input id="pr-pin" inputmode="numeric" maxlength="4" class="mono" style="letter-spacing:.4em;font-weight:800;text-align:center;font-size:1.2rem"></div>
+  <div class="err" id="pr-err"></div>
+  <button class="btn btn-primary btn-block" onclick="submitPinReset()">Save new PIN</button>
+</div></div>
+
+<div class="overlay" id="ov-invite"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-invite')">✕</button>
+  <div id="inv-form">
+    <h2>Invite a second parent</h2>
+    <p class="msub">Max 2 parents per household. Invitation is delivered by <b>SendGrid</b> and expires in 7 days.</p>
+    <div class="field"><label>Parent's email</label><input id="inv-email" type="email" placeholder="name@example.com"></div>
+    <div class="err" id="inv-err"></div>
+    <button class="btn btn-primary btn-block" onclick="submitInvite()">Send invitation</button>
+  </div>
+  <div id="inv-done" style="display:none">
+    <h2>Invitation sent ✓</h2>
+    <p class="msub" id="inv-done-text"></p>
+    <button class="btn btn-primary btn-block" onclick="closeModal('ov-invite')">Close</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-settings"><div class="modal">
+  <button class="modal-close" onclick="closeModal('ov-settings')">✕</button>
+  <h2>Household settings</h2>
+  <p class="msub">Changes are written to the append-only audit log.</p>
+  <div class="field"><label>Household name</label><input id="st-name" maxlength="60"></div>
+  <div class="field"><label>Currency symbol</label><input id="st-currency" maxlength="3" class="mono" style="max-width:110px"></div>
+  <div class="field"><label>Decimal digits</label>
+    <select id="st-decimals"><option>0</option><option>1</option><option>2</option><option>3</option></select></div>
+  <button class="btn btn-primary btn-block" onclick="saveSettings()">Save</button>
+  <div class="section-label" style="margin-top:20px">Danger zone</div>
+  <button class="btn btn-danger btn-block btn-sm" onclick="deleteHousehold()">Delete household (irreversible)</button>
+</div></div>
+
+<div class="overlay" id="ov-confirm"><div class="modal">
+  <h2 id="cf-title">Are you sure?</h2>
+  <p class="msub" id="cf-sub"></p>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-ghost" style="flex:1" onclick="closeModal('ov-confirm')">Cancel</button>
+    <button class="btn btn-danger" style="flex:1" id="cf-go">Yes, do it</button>
+  </div>
+</div></div>
+
+<div id="toasts"></div>
+
+<div id="devbar">
+  <b>PROTO&nbsp;TOOLS</b>
+  <button onclick="devParent()">Parent view</button>
+  <button onclick="devChild()">Kid view</button>
+  <button onclick="lockParent('inactivity')">Simulate 5-min lock</button>
+  <button onclick="resetDemo()">Reset demo data</button>
+</div>
+
+<script>
+"use strict";
+/* ================= Constants & state ================= */
+const ALPHABET = "0123456789ABCDEFGHJKLMNPRTVWXYZ"; // Base-31: no O I S U Q
+const LS_STATE = "pm.proto.state.v1", LS_SESSION = "pm.proto.session.v1";
+const INACTIVITY_MS = 5 * 60 * 1000; // FR-P: 5-minute parent lock
+const MAX_CHILDREN = 9;
+
+let state = null, session = null;
+let parentLocked = false, lockAt = null;
+let txType = "CREDIT", txPresetChild = null, pinResetChildId = null;
+let pendingPinAction = null; // {reason, then}
+let obPinStage = "first", obPinFirst = "";
+let loginAttempts = 0;
+
+function seed(){
+  const now = Date.now(), H = 3600e3, D = 24*H;
+  return {
+    parentPin: "2580",
+    parents: [{name:"Tohid", email:"tohid@example.com"}],
+    household: {displayName:"The Azizi Family", currencySymbol:"$", decimalDigits:2},
+    children: [
+      {id:"c-mia", accountId:"MJ74K", displayName:"Mia", pin:"1234", balance:87.50},
+      {id:"c-leo", accountId:"LEN2B", displayName:"Leo", pin:"5678", balance:12.00}
+    ],
+    transactions: [
+      {id:"t1",childId:"c-mia",type:"CREDIT",amount:5,reason:"Chore: made her bed",after:87.50,at:now-3*H},
+      {id:"t2",childId:"c-mia",type:"CREDIT",amount:10,reason:"Weekly allowance",after:82.50,at:now-1*D},
+      {id:"t3",childId:"c-mia",type:"DEBIT",amount:2.50,reason:"Bought stickers",after:72.50,at:now-2*D},
+      {id:"t4",childId:"c-mia",type:"CREDIT",amount:5,reason:"Mowed Lawn",after:75.00,at:now-4*D},
+      {id:"t5",childId:"c-mia",type:"CREDIT",amount:70,reason:"Birthday gift from grandparents",after:70.00,at:now-9*D},
+      {id:"t6",childId:"c-leo",type:"CREDIT",amount:2,reason:"Saved part of his allowance",after:12.00,at:now-6*H},
+      {id:"t7",childId:"c-leo",type:"CREDIT",amount:10,reason:"Weekly allowance",after:10.00,at:now-1*D}
+    ]
+  };
+}
+function load(){
+  try{ state = JSON.parse(localStorage.getItem(LS_STATE)) || seed(); }catch(e){ state = seed(); }
+  try{ session = JSON.parse(localStorage.getItem(LS_SESSION)); }catch(e){ session = null; }
+}
+function save(){ localStorage.setItem(LS_STATE, JSON.stringify(state)); }
+function saveSession(){ session ? localStorage.setItem(LS_SESSION, JSON.stringify(session)) : localStorage.removeItem(LS_SESSION); }
+
+/* ================= Formatting ================= */
+function fmt(n){
+  const h = state.household || {currencySymbol:"$", decimalDigits:2};
+  return h.currencySymbol + Number(n).toFixed(h.decimalDigits);
+}
+function fmtDate(ts){
+  return new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}).format(new Date(ts));
+}
+function initials(name){ return name.trim().split(/\s+/).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
+
+/* ================= Navigation ================= */
+function go(name){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("screen-"+name).classList.add("active");
+  window.scrollTo(0,0);
+  if(name==="parent-home"){ startInactivity(); } else { stopInactivity(); }
+}
+function goParentEntry(){
+  if(session && session.role==="parent"){ renderParentHome(); go("parent-home"); return; }
+  go("parent-login");
+}
+function goChildEntry(){
+  // FR-C2: persistent 365-day token — reopen goes straight to dashboard
+  if(session && session.role==="child" && state.children.some(c=>c.id===session.childId)){
+    renderChildHome(); go("child-home"); return;
+  }
+  if(session && session.role==="child"){ session=null; saveSession(); }
+  loginAttempts = 0;
+  go("child-login");
+}
+function parentSignIn(){
+  session = {role:"parent"}; saveSession();
+  if(!state.household){ startOnboarding(); return; }
+  renderParentHome(); go("parent-home");
+  toast("Signed in","Firebase ID token verified by the API.");
+}
+function parentSignOut(){ session=null; parentLocked=false; saveSession(); go("landing"); }
+
+/* ================= Onboarding ================= */
+function startOnboarding(){
+  obPinStage="first"; obPinFirst="";
+  document.getElementById("ob-step1").style.display="";
+  document.getElementById("ob-step2").style.display="none";
+  document.getElementById("ob-s1").classList.add("done");
+  document.getElementById("ob-s2").classList.remove("done");
+  go("onboarding");
+}
+function obNext(){
+  const cur = document.getElementById("ob-currency").value.trim() || "$";
+  state.household = {
+    displayName: document.getElementById("ob-name").value.trim(),
+    currencySymbol: cur.slice(0,3),
+    decimalDigits: parseInt(document.getElementById("ob-decimals").value,10)
+  };
+  save();
+  document.getElementById("ob-step1").style.display="none";
+  document.getElementById("ob-step2").style.display="";
+  document.getElementById("ob-s2").classList.add("done");
+  obPad.reset();
+}
+let obPad;
+function setupOnboardingPin(){
+  obPad = makePinPad(document.getElementById("ob-pinwrap"), {
+    onDone: (pin)=>{
+      const err = document.getElementById("ob-err");
+      if(obPinStage==="first"){
+        obPinFirst = pin; obPinStage = "confirm"; obPad.reset();
+        err.classList.remove("show");
+        toast("Now confirm your PIN","Enter the same 4 digits again.");
+      }else{
+        if(pin===obPinFirst){
+          state.parentPin = pin; save();
+          renderParentHome(); go("parent-home");
+          toast("Household ready","Currency set and Parent PIN stored as a secure hash.");
+        }else{
+          err.textContent = "PINs don't match — try again.";
+          err.classList.add("show"); obPad.shake(); obPinStage="first"; obPinFirst="";
+          setTimeout(()=>obPad.reset(),350);
+        }
+      }
+    }
+  });
+}
+
+/* ================= Parent home ================= */
+function renderParentHome(){
+  const h = state.household || {displayName:"New household"};
+  document.getElementById("ph-household").textContent = h.displayName || "Your household";
+  document.getElementById("ph-parents").textContent =
+    state.parents.map(p=>p.name).join(" + ") + " · " + state.parents.length + "/2 parents";
+  document.getElementById("ph-kidcount").textContent = "(" + state.children.length + "/" + MAX_CHILDREN + ")";
+  document.getElementById("ph-addchild").style.display =
+    state.children.length >= MAX_CHILDREN ? "none" : "";
+
+  const wrap = document.getElementById("ph-children");
+  wrap.innerHTML = "";
+  if(state.children.length===0){
+    wrap.innerHTML = '<div class="card pad" style="color:var(--muted);font-weight:600;font-size:.9rem;margin-bottom:10px">No child profiles yet — add your first kid below.</div>';
+    return;
+  }
+  state.children.forEach(c=>{
+    const el = document.createElement("div");
+    el.className = "card child-card";
+    el.innerHTML =
+      '<div class="child-row">'+
+        '<span class="avatar">'+initials(c.displayName)+'</span>'+
+        '<div class="child-meta"><div class="child-name"></div><span class="acct-chip mono"></span></div>'+
+        '<div class="child-balance money"></div>'+
+      '</div>'+
+      '<div class="child-actions">'+
+        '<button class="btn btn-primary btn-sm">＋ Transaction</button>'+
+        '<button class="btn btn-ghost btn-sm">Reset PIN</button>'+
+      '</div>';
+    el.querySelector(".child-name").textContent = c.displayName;
+    el.querySelector(".acct-chip").textContent = c.accountId;
+    el.querySelector(".child-balance").textContent = fmt(c.balance);
+    el.querySelectorAll("button")[0].onclick = ()=>openTxModal(c.id);
+    el.querySelectorAll("button")[1].onclick = ()=>openPinReset(c.id);
+    wrap.appendChild(el);
+  });
+}
+
+/* ================= Transaction modal ================= */
+function openTxModal(childId){
+  txPresetChild = childId || null;
+  const sel = document.getElementById("tx-child");
+  sel.innerHTML = state.children.map(c=>'<option value="'+c.id+'"></option>').join("");
+  state.children.forEach((c,i)=>{ sel.options[i].textContent = c.displayName + " — " + c.accountId; });
+  if(txPresetChild) sel.value = txPresetChild;
+  setTxType("CREDIT");
+  document.getElementById("tx-amount").value = "";
+  document.getElementById("tx-reason").value = "";
+  document.getElementById("tx-err").classList.remove("show");
+  updateTxPreview();
+  openModal("ov-tx");
+}
+function setTxType(t){
+  txType = t;
+  document.getElementById("tx-credit").className = t==="CREDIT" ? "on-credit" : "";
+  document.getElementById("tx-debit").className  = t==="DEBIT"  ? "on-debit"  : "";
+  updateTxPreview();
+}
+function txSelectedChild(){
+  return state.children.find(c=>c.id===document.getElementById("tx-child").value);
+}
+function updateTxPreview(){
+  const c = txSelectedChild(); if(!c) return;
+  const amt = parseFloat(document.getElementById("tx-amount").value);
+  const out = document.getElementById("tx-preview");
+  if(isNaN(amt) || amt<=0){ out.textContent = fmt(c.balance); return; }
+  out.textContent = fmt(txType==="CREDIT" ? c.balance+amt : c.balance-amt);
+}
+document.addEventListener("input", e=>{ if(e.target.id==="tx-amount") updateTxPreview(); });
+
+function submitTx(){
+  const err = document.getElementById("tx-err");
+  const c = txSelectedChild();
+  const amt = Math.round(parseFloat(document.getElementById("tx-amount").value)*1000)/1000;
+  const reason = document.getElementById("tx-reason").value.trim();
+  const fail = (m)=>{ err.textContent=m; err.classList.add("show"); };
+  err.classList.remove("show");
+  if(!c) return fail("Select a child.");
+  if(isNaN(amt) || amt<=0) return fail("Amount must be greater than zero.");
+  if(!reason) return fail("Reason is required — it's part of the ledger story.");
+  const newBalance = txType==="CREDIT" ? c.balance+amt : c.balance-amt;
+  // FR-P5 step 2: negative balance → rollback
+  if(newBalance < 0) return fail("Negative balance is not acceptable — transaction rolled back.");
+  // Simulated atomic write: row lock → insert → balance update → commit
+  c.balance = Math.round(newBalance*1000)/1000;
+  state.transactions.unshift({
+    id:"t"+Date.now(), childId:c.id, type:txType, amount:amt,
+    reason:reason.slice(0,255), after:c.balance, at:Date.now()
+  });
+  save();
+  closeModal("ov-tx");
+  renderParentHome();
+  toast("Transaction committed","BEGIN TX → row lock → insert + balance update → COMMIT. SignalR push sent to "+c.displayName+"'s devices.");
+}
+
+/* ================= Add child ================= */
+function openAddChild(){
+  document.getElementById("ac-form").style.display="";
+  document.getElementById("ac-creds").style.display="none";
+  document.getElementById("ac-name").value="";
+  document.getElementById("ac-err").classList.remove("show");
+  openModal("ov-addchild");
+}
+function genAccountId(){
+  const taken = new Set(state.children.map(c=>c.accountId));
+  let id;
+  do{
+    id = Array.from({length:5},()=>ALPHABET[Math.floor(Math.random()*ALPHABET.length)]).join("");
+  }while(taken.has(id));
+  return id;
+}
+function createChild(){
+  const name = document.getElementById("ac-name").value.trim();
+  const err = document.getElementById("ac-err");
+  if(!name){ err.textContent="Please enter the child's name."; err.classList.add("show"); return; }
+  const accountId = genAccountId();
+  const pin = String(Math.floor(1000+Math.random()*9000));
+  state.children.push({id:"c-"+Date.now(), accountId, displayName:name, pin, balance:0});
+  save();
+  document.getElementById("ac-id").textContent = accountId;
+  document.getElementById("ac-pin").textContent = pin;
+  document.getElementById("ac-form").style.display="none";
+  document.getElementById("ac-creds").style.display="";
+  toast("Child profile created","Account ID "+accountId+" · logged to audit trail.");
+}
+
+/* ================= PIN reset ================= */
+function openPinReset(id){
+  pinResetChildId = id;
+  const c = state.children.find(x=>x.id===id);
+  document.getElementById("pr-title").textContent = "Reset PIN — " + c.displayName;
+  document.getElementById("pr-pin").value = "";
+  document.getElementById("pr-err").classList.remove("show");
+  openModal("ov-pinreset");
+}
+function submitPinReset(){
+  const pin = document.getElementById("pr-pin").value;
+  const err = document.getElementById("pr-err");
+  if(!/^\d{4}$/.test(pin)){ err.textContent="PIN must be exactly 4 digits."; err.classList.add("show"); return; }
+  const c = state.children.find(x=>x.id===pinResetChildId);
+  c.pin = pin; save();
+  closeModal("ov-pinreset");
+  toast("PIN updated for "+c.displayName,"Security stamp rotated → all active 365-day tokens now rejected (401).");
+}
+
+/* ================= Invite & settings ================= */
+function openInvite(){
+  document.getElementById("inv-form").style.display="";
+  document.getElementById("inv-done").style.display="none";
+  document.getElementById("inv-email").value="";
+  document.getElementById("inv-err").classList.remove("show");
+  openModal("ov-invite");
+}
+function submitInvite(){
+  const email = document.getElementById("inv-email").value.trim();
+  const err = document.getElementById("inv-err");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.textContent="Enter a valid email address."; err.classList.add("show"); return; }
+  document.getElementById("inv-form").style.display="none";
+  document.getElementById("inv-done").style.display="";
+  document.getElementById("inv-done-text").textContent =
+    "An invitation link was sent to "+email+" via SendGrid. It expires in 7 days and links their Firebase account to this household.";
+  toast("Invitation queued","SendGrid delivery · token hashed in household_invitations.");
+}
+function openSettings(){
+  document.getElementById("st-name").value = state.household?.displayName || "";
+  document.getElementById("st-currency").value = state.household?.currencySymbol || "$";
+  document.getElementById("st-decimals").value = String(state.household?.decimalDigits ?? 2);
+  openModal("ov-settings");
+}
+function saveSettings(){
+  state.household.displayName = document.getElementById("st-name").value.trim();
+  state.household.currencySymbol = document.getElementById("st-currency").value.trim().slice(0,3) || "$";
+  state.household.decimalDigits = parseInt(document.getElementById("st-decimals").value,10);
+  save(); closeModal("ov-settings"); renderParentHome();
+  toast("Settings saved","Household update written to the audit log.");
+}
+function deleteHousehold(){
+  askConfirm("Delete household?",
+    "All children, transactions and settings are physically deleted. This cannot be undone. (Demo: this resets all prototype data.)",
+    ()=>{ localStorage.removeItem(LS_STATE); localStorage.removeItem(LS_SESSION); location.reload(); });
+}
+
+/* ================= Child login ================= */
+let clPad;
+function setupChildLogin(){
+  const acct = document.getElementById("cl-acct");
+  acct.addEventListener("input", ()=>{ acct.value = acct.value.toUpperCase().replace(/[^A-Z0-9]/g,""); });
+  clPad = makePinPad(document.getElementById("cl-pinwrap"), { onDone: tryChildLogin });
+}
+function tryChildLogin(pin){
+  const err = document.getElementById("cl-err");
+  const acct = document.getElementById("cl-acct").value.trim();
+  err.classList.remove("show");
+  if(acct.length<5){ err.textContent="Enter your 5-character Account ID first."; err.classList.add("show"); clPad.reset(); return; }
+  const c = state.children.find(x=>x.accountId===acct);
+  if(!c || c.pin!==pin){
+    loginAttempts++;
+    // Demo of progressive lockout (3 → 5 min, 6 → 15 min, 9 → permanent)
+    let extra = "";
+    if(loginAttempts===3) extra = " 3 strikes: account locked for 5 minutes (demo: keep trying).";
+    if(loginAttempts>=6)  extra = " Lockout ladder escalating: 15 min, then permanent.";
+    err.textContent = "Wrong Account ID or PIN (attempt "+loginAttempts+")."+extra;
+    err.classList.add("show"); clPad.shake(); setTimeout(()=>clPad.reset(),350);
+    toast("Failed login recorded","login_attempts append-only · IP counter checked (ban at 10).");
+    return;
+  }
+  loginAttempts = 0;
+  session = {role:"child", childId:c.id}; saveSession();
+  renderChildHome(); go("child-home");
+}
+
+/* ================= Child home ================= */
+function renderChildHome(){
+  const c = state.children.find(x=>x.id===session.childId);
+  if(!c){ session=null; saveSession(); go("landing"); return; }
+  document.getElementById("ch-hello").textContent = "Hi, "+c.displayName+"!";
+  document.getElementById("ch-acct").textContent = "Account "+c.accountId;
+  document.getElementById("ch-balance").textContent = fmt(c.balance);
+  document.getElementById("ch-household").textContent =
+    (state.household?.displayName || "My household") + " · updated live";
+  const list = document.getElementById("ch-timeline");
+  list.innerHTML = "";
+  const txs = state.transactions.filter(t=>t.childId===c.id).sort((a,b)=>b.at-a.at);
+  if(txs.length===0){
+    list.innerHTML = '<li class="tl-item"><div class="tl-body"><div class="tl-reason" style="color:var(--muted)">No transactions yet — ask a parent to log your first allowance!</div></div></li>';
+    return;
+  }
+  txs.forEach(t=>{
+    const credit = t.type==="CREDIT";
+    const li = document.createElement("li");
+    li.className = "tl-item";
+    li.innerHTML =
+      '<div class="tl-mark '+(credit?"credit":"debit")+'">'+(credit?"＋":"−")+'</div>'+
+      '<div class="tl-body"><div class="tl-reason"></div>'+
+        '<div class="tl-date">'+fmtDate(t.at)+'</div>'+
+        '<div class="tl-after">Balance after: '+fmt(t.after)+'</div></div>'+
+      '<div class="tl-amt"><div class="amt money '+(credit?"credit":"debit")+'">'+
+        (credit?"+":"−")+fmt(t.amount)+'</div></div>';
+    li.querySelector(".tl-reason").textContent = t.reason;
+    list.appendChild(li);
+  });
+}
+function childLogout(){
+  askConfirm("Log out?","Next time you'll need your Account ID and PIN again. Your failed-attempt counter is kept.",
+    ()=>{ session=null; saveSession(); go("landing"); });
+}
+
+/* ================= Shared-device guard & inactivity lock ================= */
+function requestSwitchToParent(){
+  openParentPin("Switching to Parent Dashboard", "Shared-device guard: enter the 4-digit Parent PIN to continue.", ()=>{
+    if(session && session.role==="parent"){ renderParentHome(); go("parent-home"); }
+    else { session={role:"parent"}; saveSession(); renderParentHome(); go("parent-home"); }
+    toast("Parent PIN verified","Access granted to admin routes.");
+  });
+}
+function lockParent(reason){
+  parentLocked = true;
+  openParentPin("Session locked", reason==="inactivity"
+    ? "5 minutes of inactivity (tab switch, background, or screen lock all count)."
+    : "The Parent Dashboard is locked.",
+    ()=>{ parentLocked=false; startInactivity(); toast("Welcome back","Parent session unlocked."); });
+}
+let ppPad;
+function openParentPin(title, sub, then){
+  pendingPinAction = then;
+  document.getElementById("pp-title").textContent = title;
+  document.getElementById("pp-sub").textContent = sub;
+  document.getElementById("pp-err").classList.remove("show");
+  ppPad.reset();
+  openModal("ov-parent-pin", true);
+}
+function setupParentPinPad(){
+  ppPad = makePinPad(document.getElementById("pp-pinwrap"), { onDone:(pin)=>{
+    const err = document.getElementById("pp-err");
+    if(state.parentPin && pin===state.parentPin){
+      closeModal("ov-parent-pin");
+      const fn = pendingPinAction; pendingPinAction=null; if(fn) fn();
+    }else{
+      err.textContent="Wrong PIN — try again."; err.classList.add("show");
+      ppPad.shake(); setTimeout(()=>ppPad.reset(),350);
+    }
+  }});
+}
+
+/* Inactivity timer (real 5-minute countdown while parent session is active) */
+let inactivityTimer=null, chipTimer=null;
+function startInactivity(){
+  stopInactivity();
+  lockAt = Date.now()+INACTIVITY_MS;
+  inactivityTimer = setTimeout(()=>{ if(!parentLocked) lockParent("inactivity"); }, INACTIVITY_MS);
+  chipTimer = setInterval(()=>{
+    const el = document.getElementById("ph-lockchip");
+    if(!el) return;
+    const left = Math.max(0, lockAt-Date.now());
+    el.textContent = "Lock " + Math.floor(left/60000) + ":" + String(Math.floor(left/1000)%60).padStart(2,"0");
+  },1000);
+}
+function stopInactivity(){
+  clearTimeout(inactivityTimer); clearInterval(chipTimer);
+  inactivityTimer=null; chipTimer=null;
+}
+["pointerdown","keydown","wheel"].forEach(ev=>
+  document.addEventListener(ev, ()=>{
+    if(session && session.role==="parent" && !parentLocked &&
+       document.getElementById("screen-parent-home").classList.contains("active")) startInactivity();
+  },{passive:true}));
+
+/* ================= PIN pad component ================= */
+function makePinPad(container, {onDone, length=4}){
+  container.innerHTML =
+    '<div class="pindots">'+Array.from({length},()=>'<span></span>').join("")+'</div>'+
+    '<div class="keypad">'+
+      [1,2,3,4,5,6,7,8,9].map(n=>'<button data-k="'+n+'">'+n+'</button>').join("")+
+      '<button class="k-ghost"></button><button data-k="0">0</button><button class="k-ghost" data-k="back">⌫</button>'+
+    '</div>';
+  const dots = container.querySelectorAll(".pindots span");
+  const wrap = container.querySelector(".pindots");
+  let value = "";
+  function draw(){ dots.forEach((d,i)=>d.classList.toggle("filled", i<value.length)); }
+  container.querySelector(".keypad").addEventListener("click", e=>{
+    const k = e.target.dataset && e.target.dataset.k;
+    if(k===undefined) return;
+    if(k==="back"){ value=value.slice(0,-1); draw(); return; }
+    if(value.length>=length) return;
+    value += k; draw();
+    if(value.length===length){ const v=value; setTimeout(()=>onDone(v),120); }
+  });
+  return {
+    reset(){ value=""; wrap.classList.remove("err"); draw(); },
+    shake(){ wrap.classList.add("err"); }
+  };
+}
+
+/* ================= Modal / toast / confirm helpers ================= */
+function openModal(id, dismissDisabled){
+  document.getElementById(id).classList.add("open");
+}
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll(".overlay").forEach(ov=>{
+  ov.addEventListener("click", e=>{ if(e.target===ov && ov.id!=="ov-parent-pin") ov.classList.remove("open"); });
+});
+function toast(msg, sub){
+  const t = document.createElement("div");
+  t.className="toast"; t.textContent=msg;
+  if(sub){ const s=document.createElement("small"); s.textContent=sub; t.appendChild(s); }
+  document.getElementById("toasts").appendChild(t);
+  setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .3s"; setTimeout(()=>t.remove(),320); }, 3600);
+}
+let confirmFn=null;
+function askConfirm(title, sub, fn){
+  document.getElementById("cf-title").textContent=title;
+  document.getElementById("cf-sub").textContent=sub;
+  confirmFn=fn; openModal("ov-confirm");
+}
+document.getElementById("cf-go").addEventListener("click", ()=>{
+  closeModal("ov-confirm"); const f=confirmFn; confirmFn=null; if(f) f();
+});
+
+/* ================= Dev tools ================= */
+function devParent(){
+  if(!state.household){ toast("No household yet","Sign in as parent once to run onboarding, or use the seeded demo."); return; }
+  session={role:"parent"}; saveSession(); renderParentHome(); go("parent-home");
+}
+function devChild(){
+  const c=state.children[0]; if(!c) return;
+  session={role:"child",childId:c.id}; saveSession(); renderChildHome(); go("child-home");
+}
+function resetDemo(){
+  localStorage.removeItem(LS_STATE); localStorage.removeItem(LS_SESSION); location.reload();
+}
+
+/* ================= Boot ================= */
+load();
+setupOnboardingPin();
+setupChildLogin();
+setupParentPinPad();
+if(session && session.role==="parent" && state.household){ renderParentHome(); go("parent-home"); }
+else if(session && session.role==="child" && state.children.some(c=>c.id===session.childId)){ renderChildHome(); go("child-home"); }
+else go("landing");
+</script>
+</body>
+</html>

@@ -119,6 +119,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 | `account_id` | string | required | exactly as received from the client, even if invalid |
 | `created_at` | Timestamp | Auto / UTC | Timestamp when the transaction was logged |
 | `ip` | String | required | ip of the requester |
+| `client_info` | JSON | required | client info extracted from the http request |
 
 \* loginattempts is global, not per household.
 
