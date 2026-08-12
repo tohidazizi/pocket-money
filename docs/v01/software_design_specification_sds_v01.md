@@ -18,33 +18,76 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 
 ```text
 ├── src/
-│   ├── PocketMoney.Shared/           # Shared DTOs, Enums, Base31 Logic, Constants
-│   │   ├── Consts/
-│   │   ├── Dtos/
-│   │   ├── Enums/
-│   │   └── Utilities/
+│   ├── CrossLayer /
+│   │    └── PocketMoney.Global/          # Globally shared Enums, Constants, Helpers, etc.
 │   │
-│   ├── PocketMoney.Domain/           # Core Entities & Value Objects (Code-First)
-│   │   ├── Entities/
-│   │   └── Interfaces/
+│   ├── Domain /
+│   │    └── PocketMoney.Domain/           # Core Entities & Value Objects (Code-First)
+│   │        ├── Entities/
+│   │        ├── ValueObjects/
+│   │        │ etc.
 │   │
-│   ├── PocketMoney.Infrastructure/   # DbContext, EF Configurations, Repositories, Services
-│   │   ├── Data/
-│   │   ├── EntityConfigurations/
-│   │   ├── Migrations/
-│   │   └── Services/
+│   ├── Application /
+│   │    ├── PocketMoney.Application/      # Core Entities & Value Objects (Code-First)
+│   │    │   ├── Households/
+│   │    │   ├── Parents/
+│   │    │   ├── Children/
+│   │    │   ├── Transactions/
+│   │    │   │ etc.
+│   │    │
+│   │    ├── PocketMoney.Application.Model/ # DTOs for Application Interfaces, API tier, and Client
+│   │    │   ├── Households/
+│   │    │   ├── Parents/
+│   │    │   ├── Children/
+│   │    │   ├── Transactions/
+│   │    │   │ etc.
+│   │    │
+│   │    └── PocketMoney.Application.Contract/  # Application Interfaces for API tier
+│   │        ├── Interfaces/
+│   │        ├── Dtos/
+│   │        │ etc.
 │   │
-│   ├── PocketMoney.Api/              # Controllers, SignalR Hubs, Middlewares, Auth Handlers
-│   │   ├── Controllers/
-│   │   ├── Hubs/
-│   │   └── Middlewares/
+│   ├── Infrastructure /   
+│   │   ├── PocketMoney.Persistence/       # DbContext, EF Configurations, Repositories, Services
+│   │   │   ├── Data/
+│   │   │   ├── EntityConfigurations/
+│   │   │   └── Migrations/
+│   │   │
+│   │   └── PocketMoney.Authentication/    # Firebase integration
+│   │       └── adapter to Firebase
 │   │
-│   └── PocketMoney.Client/           # Blazor WASM UI Components, State, Services
-│       ├── Pages/
-│       ├── Shared/
-│       └── Services/
-
+│   └── Presentation /
+│       ├── PocketMoney.Shared/            # Shared "only" between API and Client
+│       │   └── Utilities/
+│       │
+│       ├── PocketMoney.Api/               # Controllers, SignalR Hubs, Middlewares, Auth Handlers
+│       │   ├── Controllers/
+│       │   ├── Hubs/
+│       │   └── Middlewares/
+│       │
+|       └── PocketMoney.Client/            # Blazor WASM UI Components, State, Services
+│           ├── Pages/
+│           ├── Shared/
+│           └── Services/
+│
 ```
+
+### 1.3 Configuration & Secrets
+
+The API reads all environment-specific values from configuration providers (environment variables / secret store). **Nothing environment-specific is hardcoded or committed.**
+
+| Setting | Used by | Notes |
+| --- | --- | --- |
+| PostgreSQL connection string | EF Core (`Infrastructure`) | Per environment; pooled Npgsql |
+| Firebase service account key | API middleware | Verifies parent ID tokens (server-to-server credential) |
+| Child JWT signing key | Custom 365-day token issuer | Never exposed to the client |
+| SendGrid API key | Invitation emails | Server-side only |
+| Allowed CORS origins | API | Per-environment SPA origins |
+
+Rules:
+
+* Secrets live in the host's secret store / environment variables; `.env` files and connection strings are git-ignored.
+* Each environment (dev / staging / prod) gets its own database and its own secret set. Hosting provider is undecided (ADD §10), so the concrete mechanism is deferred — the contract above is what the code depends on.
 
 ## 2. Domain Models & EF Core Code-First Schema
 
@@ -55,19 +98,53 @@ namespace PocketMoney.Shared.Consts;
 
 public static class Constants
 {
-    public const Base31Alphabet = "0123456789ABCDEFGHJKLMNPRTVWXYZ"; // Base-31: no O I S U Q
-    public const InactivityLimit = 5 * 60 * 1000; // FR-P: 5-minute parent lock
-    
+    // Account IDs (FR-P3): Base-31 alphabet, O I S U Q excluded
+    public const string Base31Alphabet = "0123456789ABCDEFGHJKLMNPRTVWXYZ";
+
+    // Shared device guard (FR-P6): parent inactivity lock, milliseconds (5 minutes)
+    public const int ParentInactivityLockMs = 5 * 60 * 1000;
+
+    // Household limits (FR-P2)
+    public const byte MaxParentsPerHousehold = 2;
+
     public static class Child
     {
         public const byte AccountIdLength = 5;
         public const byte ChildrenMax = 9;
-        public const int DisplayNameMaxLength = 9;
+        public const int DisplayNameMaxLength = 100;
+
+        // Persistent child session lifetime in days (FR-C2)
+        public const ushort TokenLifetimeDays = 365;
     }
 
     public static class Transaction
     {
         public const int ReasonMaxLength = 255;
+
+        // Family-friendly emoji whitelist for Transaction.Reason (SRS §9).
+        // Emoji characters outside this list are stripped at the API boundary.
+        // An entry implicitly includes its U+FE0F variation-selector form.
+        public const string ReasonEmojiWhitelist = "😀😄😁😆🙂😉😊😍🥰😘😜😎🤩🥳😅😂🤣☺️👍👏🙌👋🤝💪🙏❤️🧡💛💚💙💜🤍🎉🎊🎁🎈⭐✨🏆🥇🏅💰💵💶💷💸🪙🌈☀️🌸🌻🌳🌙🐶🐱🐰🐼🦄🐢🦋🐝🍎🍌🍪🧁🎂🍕🍦🍿⚽🚲🎨🎮📚✏️🧩⏰";
+    }
+
+    // Child account lockout ladder (NFR-4). Tiers of MaxFailedAttemptsPerLockout
+    // cumulative failures; the counter resets to 0 on a successful login.
+    public static class Lockout
+    {
+        public const byte MaxFailedAttemptsPerLockout = 3;
+        public const byte FirstLockoutMinutes = 5;    // at 3 cumulative failures
+        public const byte SecondLockoutMinutes = 15;  // at 6 cumulative failures
+        public const byte PermanentLockThreshold = MaxFailedAttemptsPerLockout * 3; // 9 → permanent
+    }
+
+    // Global IP ban (NFR-4). IP bans apply app-wide; static assets/CDN are exempt.
+    public static class IpBan
+    {
+        public const byte FailureThreshold = 10;   // failures from one IP within the window
+        public const byte FailureWindowHours = 24;
+        public const byte FirstBanDays = 1;        // 24 hours
+        public const byte SecondBanDays = 7;       // 1 week
+        public const byte ThirdBanDays = 30;       // 1 month
     }
 }
 ```
@@ -232,7 +309,7 @@ public sealed class AuditLog
 
 ```
 
-### 2.3 EF Core Configuration Mappings (`PocketMoney.Infrastructure/EntityConfigurations`)
+### 2.4 EF Core Configuration Mappings (`PocketMoney.Infrastructure/EntityConfigurations`)
 
 ```csharp
 namespace PocketMoney.Infrastructure.EntityConfigurations;
@@ -251,6 +328,10 @@ public sealed class ChildConfiguration : IEntityTypeConfiguration<Child>
 
         builder.HasIndex(c => c.AccountId).IsUnique();
 
+        // Note: SRS specifies current_balance as Decimal(10,3). (13,3) is a
+        // deliberate, documented deviation: balance is a running sum of (10,3)
+        // amounts and can legitimately exceed a (10,3) range; (13,3) is a strict
+        // superset and keeps remaining_after and current_balance at equal width.
         builder.Property(c => c.CurrentBalance)
             .HasPrecision(13, 3)
             .HasDefaultValue(0.000m);
@@ -301,8 +382,8 @@ Excludes `O`, `I`, `S`, `U`, and `Q` to prevent visual confusion.
 ```csharp
 public static class Base31Generator
 {
-    private static readonly AccountIdLength = Constants.Child.AccountIdLength;
-    private static readonly Alphabet = Constants.Base31Alphabet;
+    private static readonly byte AccountIdLength = Constants.Child.AccountIdLength;
+    private static readonly string Alphabet = Constants.Base31Alphabet;
 
     public static string GenerateAccountId()
     {
@@ -334,57 +415,61 @@ When a parent updates a child's PIN (FR-P4):
 ```csharp
 public async Task HandleFailedLoginAsync(string accountId, ClientInfo clientInfo, Child? child)
 {
-    // 1. Log attempt
+    // 1. Log attempt (accountId stored verbatim, even if invalid — audit requirement)
     _dbContext.LoginAttempts.Add(new LoginAttempt
     {
         AccountId = accountId,
-        IpAddress = clientInfo.ipAddress,
-        ClientInfo = clientInfo, 
+        IpAddress = clientInfo.IpAddress,
+        HttpRequestInfo = clientInfo.HttpRequestInfo,
         IsSuccessful = false
     });
 
-    // 2. Check Global IP Ban threshold (10 failures across any account in 24h)
+    // 2. Check Global IP Ban threshold (NFR-4): IpBan.FailureThreshold failures
+    //    from one IP within IpBan.FailureWindowHours, across any child account
+    var windowStart = DateTime.UtcNow.AddHours(-Constants.IpBan.FailureWindowHours);
     var ipFailures = await _dbContext.LoginAttempts
-        .CountAsync(l => l.IpAddress == ipAddress && !l.IsSuccessful && l.CreatedAt >= DateTime.UtcNow.AddHours(-24)); // TODO: -24: add to Constants
+        .CountAsync(l => l.IpAddress == clientInfo.IpAddress && !l.IsSuccessful && l.CreatedAt >= windowStart);
 
-    if (ipFailures >= 10) // TODO: 10: add to Constants
+    if (ipFailures >= Constants.IpBan.FailureThreshold)
     {
-        var existingBan = await _dbContext.IpBans.FirstOrDefaultAsync(b => b.IpAddress == ipAddress);
+        var existingBan = await _dbContext.IpBans.FirstOrDefaultAsync(b => b.IpAddress == clientInfo.IpAddress);
         int banCount = (existingBan?.BanCount ?? 0) + 1;
-        
+
         DateTime bannedUntil = banCount switch
         {
-            1 => DateTime.UtcNow.AddDays(1), // TODO: 1: add to Constants
-            2 => DateTime.UtcNow.AddDays(7), // TODO: 7: add to Constants
-            _ => DateTime.UtcNow.AddDays(30) // TODO: 30: add to Constants
+            1 => DateTime.UtcNow.AddDays(Constants.IpBan.FirstBanDays),   // 24 hours
+            2 => DateTime.UtcNow.AddDays(Constants.IpBan.SecondBanDays),  // 1 week
+            _ => DateTime.UtcNow.AddDays(Constants.IpBan.ThirdBanDays)    // 1 month
         };
 
         if (existingBan != null)
         {
             existingBan.BanCount = banCount;
             existingBan.BannedUntil = bannedUntil;
+            existingBan.UpdatedAt = DateTime.UtcNow;
         }
         else
         {
-            _dbContext.IpBans.Add(new IpBan { IpAddress = ipAddress, BanCount = banCount, BannedUntil = bannedUntil });
+            _dbContext.IpBans.Add(new IpBan { IpAddress = clientInfo.IpAddress, BanCount = banCount, BannedUntil = bannedUntil });
         }
     }
 
-    // 3. Child Specific Lockout Steps (3, 6, 9 attempts)
+    // 3. Child-specific lockout ladder (NFR-4): 3 failures → 5 min, 6 → 15 min, 9 → permanent
     if (child != null)
     {
         child.UnsuccessfulLoginAttempts++;
-        if (child.UnsuccessfulLoginAttempts >= 9) // TODO: 9: add to Constants
+
+        if (child.UnsuccessfulLoginAttempts >= Constants.Lockout.PermanentLockThreshold)
         {
-            child.IsPermanentlyLocked = true;
+            child.LockedUntil = DateTime.MaxValue; // IsPermanentlyLocked derives from this
         }
-        else if (child.UnsuccessfulLoginAttempts == 6) // TODO: 6: add to Constants
+        else if (child.UnsuccessfulLoginAttempts == Constants.Lockout.MaxFailedAttemptsPerLockout * 2)
         {
-            child.LockedUntil = DateTime.UtcNow.AddMinutes(15); // TODO: 15: add to Constants
+            child.LockedUntil = DateTime.UtcNow.AddMinutes(Constants.Lockout.SecondLockoutMinutes);
         }
-        else if (child.UnsuccessfulLoginAttempts == 3)
+        else if (child.UnsuccessfulLoginAttempts == Constants.Lockout.MaxFailedAttemptsPerLockout)
         {
-            child.LockedUntil = DateTime.UtcNow.AddMinutes(5); // TODO: 5: add to Constants
+            child.LockedUntil = DateTime.UtcNow.AddMinutes(Constants.Lockout.FirstLockoutMinutes);
         }
     }
 
@@ -471,7 +556,7 @@ Parent PIN lock (FR-P6) is strictly a client-side route guard.
 public class InactivityTimerService : IDisposable
 {
     private Timer? _timer;
-    private const int InactivityTimeoutMs = 5 * 60 * 1000; // 5 Minutes
+    private const int InactivityTimeoutMs = Constants.ParentInactivityLockMs; // 5 Minutes
     public event Action? OnInactivityTimeout;
 
     public void Start() => ResetTimer();
@@ -497,7 +582,8 @@ public class InactivityTimerService : IDisposable
 | Method | Endpoint | Authorization | Description |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/auth/child/login` | Public | Authenticates child via Base31 Account ID + PIN |
-| `PUT` | `/api/v1/households/{id}/settings` | Parent JWT | sets household settings: currency & decimal accuracy |
+| ~~`POST`~~ | ~~`/api/v1/households`~~ | ~~Firebase JWT~~ | Parent very first time log-in triggers creating a household for him/her |
+| `PUT` | `/api/v1/households/{id}/settings` | Parent JWT | Sets household settings: currency & decimal accuracy |
 | `DELETE` | `/api/v1/households` | Parent JWT | Physical deletion of household (Owner parent only) |
 | `POST` | `/api/v1/households/invite` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
 | `POST` | `/api/v1/households/accept-invite` | Firebase JWT | Links 2nd parent to household |
@@ -550,3 +636,101 @@ public class AuditService : IAuditService
 }
 
 ```
+
+## 9. Input Validation & Sanitization Rules (SRS §9)
+
+Validation runs in three layers: **UI**, **API boundary** (DTO validation before any domain logic) and **database** (EF constraints as a final net). The rules below are normative for V1.
+
+### 9.1 Trimming & Whitespace
+
+* Bad characters and code injection attempt must be rejected at both UI and API tiers.
+* All user-supplied strings are `Trim()`-ed at model binding, before any other rule.
+* Values that are empty or whitespace-only after trimming are rejected (`400`) for required fields.
+
+### 9.2 Max Lengths & Allowed Characters
+
+| Field | Max length | Allowed characters / format | Input/Display |
+| --- | --- | --- | --- |
+| Child `AccountId` | 5 (fixed) | `^[0-9A-HJKLMNPRTVWXYZ]{5}$` — uppercase only; lowercase input is normalized to uppercase before lookup | Display |
+| Child / Parent `DisplayName` | 100 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
+| Household `DisplayName` | 60 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
+| `CurrencySymbol` | 3 | Any 1–3 printable characters | Display |
+| Transaction `Reason` | 255 | Free-form Unicode; control characters (U+0000–U+001F, U+007F) stripped; emoji restricted to `Constants.Transaction.ReasonEmojiWhitelist` — non-whitelisted emoji stripped at the API boundary | Input/Display |
+| PINs (child & parent) | 4 | Exactly 4 digits, `^\d{4}$` | Input |
+| Invitation email | 320 | RFC-5322 shape; verified again by Firebase at acceptance | Input/Display |
+
+### 9.3 Sanitization Posture
+
+* No HTML, markup, or SQL interpretation is applied to stored values — they persist exactly as received (post-trim).
+* All database access goes through EF Core parameterized queries; no string-concatenated SQL, so no SQL-injection escaping is needed.
+* The Blazor client renders all user text as text (auto-escaped); no raw HTML injection point exists.
+
+### 9.4 Decimal Precision Rules
+
+* Transaction `amount` must be **strictly greater than 0** and ≤ 9,999,999.999 (fits `Decimal(10,3)`).
+* The fractional scale of `amount` must not exceed the household's `decimal_digits`. Values violating this are **rejected with `400` — never silently rounded**.
+* `remaining_after` is computed server-side from `current_balance ± amount`; the client's preview is display-only.
+
+### 9.5 Trailing-Zero Display (Frontend)
+
+* Balances and amounts are rendered with **exactly** the household's `decimal_digits` decimal places (e.g. `$5.00` when `decimal_digits = 2`, `$5` when `0`).
+* The API returns raw decimal values plus the household settings; formatting is a client responsibility per SRS §9.
+
+## 10. Multi-Tenant Enforcement Model (SRS §3.1)
+
+`Household` is the sole tenant boundary. Enforcement is layered — no single layer is trusted alone:
+
+1. **Token resolution:** the auth middleware resolves the caller's identity into `HouseholdId` (parents) or `ChildId + HouseholdId` (children) claims. Requests without a resolved household are rejected before reaching controllers.
+2. **Query scoping:** every tenant-scoped entity (`parents`, `children`, `transactions`, `household_invitations`, `audit_logs`) is filtered by `household_id` via EF Core global query filters seeded from the resolved claims. A query that omits the filter must be an explicit, reviewed exception.
+3. **Child session restriction:** child tokens additionally scope reads to their own `child_id`, and only read-only timeline/balance endpoints are exposed to child roles (FR-S2).
+4. **Real-time:** `LedgerHub.JoinChildGroup` verifies household ownership of the requested `child_id` before adding the connection to the group.
+5. **Global by design:** `login_attempts` and `ip_bans` are intentionally **not** tenant-scoped (SRS §4.4 note).
+
+**Household deletion:** physical deletion of the tenant subtree (household, parents, children, transactions, invitations). `audit_logs` and global `login_attempts` survive deletion for auditing, per FR-P1.
+
+### Out of Scope for V1
+
+V1 will NOT implement the followings:
+
+* PostgreSQL Row-Level Security (RLS)
+
+## 11. Database Migration Strategy
+
+Schema evolves via **EF Core Code-First migrations** (`PocketMoney.Infrastructure/Migrations/`). The database is never hand-edited; the migration history is the source of truth for schema state.
+
+### 11.1 Conventions
+
+* **One logical change = one migration.** Descriptive imperative names: `AddChildrenSecurityStamp`, `AddIpBanBanCount`.
+* Applied migrations are **immutable**: a shipped migration is never edited or deleted. Wrong step → ship a corrective migration on top.
+* **No `EnsureCreated()`** — only `Migrate()`.
+* Every schema change — including index additions (e.g. the `(child_id, created_at)` timeline index) — goes through a migration.
+* Migrations are applied in CI/CD at deploy time (or via an explicit release step), with a database backup taken immediately before.
+
+### 11.2 Append-Only Table Protection
+
+`transactions`, `login_attempts`, and `audit_logs` are append-only by design. Migrations touching them may:
+
+* ✔ add columns (nullable or with a default backfill value)
+* ✔ add indexes
+
+…and may **never**:
+
+* ✘ drop them, drop their columns, or truncate data
+* ✘ rewrite historical values (e.g. recomputing `remaining_after`)
+
+Any migration that must rename or retype a column on an append-only table is a review-required exception, done additively: add new column → backfill → switch reads → drop old column in a *later* migration.
+
+### 11.3 Tenant Data & Deletion
+
+* Household deletion (FR-P1) is **application logic**, not migration logic. Migrations never delete tenant data.
+* FK cascade behavior for the household subtree is defined in EF entity configurations; migrations must not introduce cascades that could touch `audit_logs` or global tables.
+
+### 11.4 Seed Data
+
+* No production seed data. Fresh databases are structurally empty; households are created through the parent onboarding flow.
+* Test environments may use a separate dev-only seeding tool — never part of the migration chain.
+
+### 11.5 Verification
+
+* Each new migration must run cleanly against both (a) a fresh database and (b) a copy of the current production schema — enforced in CI.
+* Destructive-looking operations (`DropTable`, `DropColumn`) outside the append-only carve-outs in §11.2 require explicit reviewer sign-off in the PR.
