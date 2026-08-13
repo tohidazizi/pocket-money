@@ -14,28 +14,48 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 * **Authentication:** Firebase Authentication (Parents) + Custom 365-day JWT Issuer (Children)
 * **Email Service:** SendGrid (for second parent invitation delivery)
 
-### 1.2 Solution Structure (`PocketMoney.sln`)
+### 1.2 Solution/Project Stack
+
+* **`.slnx` instead of `.sln`** for solution files
+* **SDK-style projects** (`<Project Sdk="Microsoft.NET.Sdk">`)
+* **Central Package Management** via `Directory.Packages.props`
+* **Implicit usings** enabled
+* **File-scoped namespaces**
+* **Nullable reference types** enabled
+* **Analyzer packages** and warning-as-errors for code quality
+* **`<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`** for CI-quality builds
+* **`<EnableNETAnalyzers>true</EnableNETAnalyzers>`** and a pinned analysis level
+* **`global using static` / aliases** when they genuinely improve readability
+* **`dotnet format` / code style enforcement** in CI
+* **EditorConfig** (`.editorconfig`) as the source of truth for style
+* **`global.json`** to pin the .NET SDK version
+* **Centralized test package versions** and test helpers in the repo root
+* **Source generators** where they replace reflection/boilerplate cleanly
+* **Modern config files** like `appsettings.json` plus environment-specific overrides
+
+### 1.3 Solution Structure (`PocketMoney.slnx`)
 
 ```text
 ├── src/
-│   ├── CrossLayer /
+│   ├── Cross Layer/
 │   │    └── PocketMoney.Global/          # Globally shared Enums, Constants, Helpers, etc.
 │   │
-│   ├── Domain /
-│   │    └── PocketMoney.Domain/           # Core Entities & Value Objects (Code-First)
+│   ├── Domain/
+│   │    └── PocketMoney.Domain/          # Domain Entities  (Code-First), Value Objects, etc.
 │   │        ├── Entities/
 │   │        ├── ValueObjects/
 │   │        │ etc.
 │   │
-│   ├── Application /
-│   │    ├── PocketMoney.Application/      # Core Entities & Value Objects (Code-First)
+│   ├── Application/
+│   │    ├── PocketMoney.Application/     # Core application logics
 │   │    │   ├── Households/
 │   │    │   ├── Parents/
 │   │    │   ├── Children/
 │   │    │   ├── Transactions/
 │   │    │   │ etc.
 │   │    │
-│   │    ├── PocketMoney.Application.Model/ # DTOs for Application Interfaces, API tier, and Client
+│   │    ├── PocketMoney.Application.Model/ # Request models and response models used in the Application.Contract;
+│   │    │   │                              # API and Client also use these models.
 │   │    │   ├── Households/
 │   │    │   ├── Parents/
 │   │    │   ├── Children/
@@ -44,11 +64,10 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 │   │    │
 │   │    └── PocketMoney.Application.Contract/  # Application Interfaces for API tier
 │   │        ├── Interfaces/
-│   │        ├── Dtos/
 │   │        │ etc.
 │   │
-│   ├── Infrastructure /   
-│   │   ├── PocketMoney.Persistence/       # DbContext, EF Configurations, Repositories, Services
+│   ├── Infrastructure/   
+│   │   ├── PocketMoney.Persistence/       # DbContext, EF Configurations, Repositories
 │   │   │   ├── Data/
 │   │   │   ├── EntityConfigurations/
 │   │   │   └── Migrations/
@@ -56,29 +75,34 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 │   │   └── PocketMoney.Authentication/    # Firebase integration
 │   │       └── adapter to Firebase
 │   │
-│   └── Presentation /
-│       ├── PocketMoney.Shared/            # Shared "only" between API and Client
-│       │   └── Utilities/
-│       │
-│       ├── PocketMoney.Api/               # Controllers, SignalR Hubs, Middlewares, Auth Handlers
-│       │   ├── Controllers/
-│       │   ├── Hubs/
-│       │   └── Middlewares/
-│       │
-|       └── PocketMoney.Client/            # Blazor WASM UI Components, State, Services
-│           ├── Pages/
-│           ├── Shared/
-│           └── Services/
+│   ├── Presentation/
+│   │   ├── PocketMoney.Shared/            # Shared "only" between API and Client
+│   │   │   └── Utilities/
+│   │   │
+│   │   ├── PocketMoney.Api/               # Controllers, SignalR Hubs, Middlewares, Auth Handlers
+│   │   │   ├── Controllers/
+│   │   │   ├── Hubs/
+│   │   │   └── Middlewares/
+│   │   │
+|   │   └── PocketMoney.Client/            # Blazor WASM UI Components, State, Services
+│   │       ├── Pages/
+│   │       ├── Shared/
+│   │       └── Services/
+│   │
+│   └── Tests/
+│       ├── PocketMoney.Application.Test/
+│       ├── PocketMoney.Api.Test/
+│       └── PocketMoney.Client.Test/
 │
 ```
 
-### 1.3 Configuration & Secrets
+### 1.4 Configuration & Secrets
 
 The API reads all environment-specific values from configuration providers (environment variables / secret store). **Nothing environment-specific is hardcoded or committed.**
 
 | Setting | Used by | Notes |
 | --- | --- | --- |
-| PostgreSQL connection string | EF Core (`Infrastructure`) | Per environment; pooled Npgsql |
+| PostgreSQL connection string | `PocketMoney.Persistence` | Per environment; pooled Npgsql |
 | Firebase service account key | API middleware | Verifies parent ID tokens (server-to-server credential) |
 | Child JWT signing key | Custom 365-day token issuer | Never exposed to the client |
 | SendGrid API key | Invitation emails | Server-side only |
@@ -89,12 +113,30 @@ Rules:
 * Secrets live in the host's secret store / environment variables; `.env` files and connection strings are git-ignored.
 * Each environment (dev / staging / prod) gets its own database and its own secret set. Hosting provider is undecided (ADD §10), so the concrete mechanism is deferred — the contract above is what the code depends on.
 
+### 1.5 Third party free packages to use
+
+* Npgsql.EntityFrameworkCore.PostgreSQL
+* Scalar.AspNetCore
+* Serilog.AspNetCore
+* refit
+* Microsoft.Extensions.Http.Resilience
+
+Testing (see §13 — versions pinned centrally via `Directory.Packages.props`):
+
+* xUnit + xunit.runner.visualstudio
+* Microsoft.NET.Test.Sdk
+* NSubstitute
+* FluentAssertions
+* bUnit (Blazor component tests)
+* Testcontainers.PostgreSQL (real PostgreSQL for `PocketMoney.Api.Test`)
+
+
 ## 2. Domain Models & EF Core Code-First Schema
 
-### 2.1 Shared Constants (`PocketMoney.Shared/Consts`)
+### 2.1 Shared Constants (`PocketMoney.Global`)
 
 ```csharp
-namespace PocketMoney.Shared.Consts;
+namespace PocketMoney.Global;
 
 public static class Constants
 {
@@ -127,6 +169,13 @@ public static class Constants
         public const string ReasonEmojiWhitelist = "😀😄😁😆🙂😉😊😍🥰😘😜😎🤩🥳😅😂🤣☺️👍👏🙌👋🤝💪🙏❤️🧡💛💚💙💜🤍🎉🎊🎁🎈⭐✨🏆🥇🏅💰💵💶💷💸🪙🌈☀️🌸🌻🌳🌙🐶🐱🐰🐼🦄🐢🦋🐝🍎🍌🍪🧁🎂🍕🍦🍿⚽🚲🎨🎮📚✏️🧩⏰";
     }
 
+    // Timeline pagination (FR-C4): keyset paging; see §12
+    public static class Timeline
+    {
+        public const byte DefaultPageSize = 25;
+        public const byte MaxPageSize = 100; // server-enforced ceiling
+    }
+
     // Child account lockout ladder (NFR-4). Tiers of MaxFailedAttemptsPerLockout
     // cumulative failures; the counter resets to 0 on a successful login.
     public static class Lockout
@@ -149,10 +198,10 @@ public static class Constants
 }
 ```
 
-### 2.2 Shared Enums (`PocketMoney.Shared/Enums`)
+### 2.2 Shared Enums (`PocketMoney.Global`)
 
 ```csharp
-namespace PocketMoney.Shared.Enums;
+namespace PocketMoney.Global;
 
 public enum TransactionType
 {
@@ -309,10 +358,27 @@ public sealed class AuditLog
 
 ```
 
-### 2.4 EF Core Configuration Mappings (`PocketMoney.Infrastructure/EntityConfigurations`)
+### 2.4 EF Core Configuration Mappings (`PocketMoney.Persistence`)
 
 ```csharp
-namespace PocketMoney.Infrastructure.EntityConfigurations;
+namespace PocketMoney.Persistence.EntityConfigurations;
+
+public sealed class ParentConfiguration : IEntityTypeConfiguration<Parent>
+{
+    public void Configure(EntityTypeBuilder<Parent> builder)
+    {
+        builder.ToTable("parents");
+        builder.HasKey(p => p.Id); // Firebase User UID
+
+        // One Firebase user belongs to at most one household, ever.
+        // The PK already makes Id globally unique; this composite unique
+        // index is explicit defense-in-depth documenting that contract.
+        builder.HasIndex(p => new { p.Id, p.HouseholdId }).IsUnique();
+
+        builder.Property(p => p.Email).IsRequired();
+        builder.Property(p => p.ParentPinHash).IsRequired();
+    }
+}
 
 public sealed class ChildConfiguration : IEntityTypeConfiguration<Child>
 {
@@ -366,20 +432,27 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .HasMaxLength(Constants.Transaction.ReasonMaxLength)
             .IsRequired();
 
-        // Optimized query performance for child timeline (FR-C4)
-        builder.HasIndex(t => new { t.ChildId, t.CreatedAt });
+        // Optimized query performance for child timeline (FR-C4, §12 keyset paging).
+        // created_at DESC for newest-first order; Id DESC as tiebreaker so rows
+        // sharing a timestamp page without gaps or duplicates.
+        builder.HasIndex(t => new { t.ChildId, t.CreatedAt, t.Id })
+            .IsDescending(false, true, true);
     }
 }
 
 ```
 
+**One parent — one household:** a Firebase UID can belong to at most one household, ever (enforced by `ParentConfiguration` above and re-checked at invitation acceptance, §5). Consequently, `accept-invite` must reject any Firebase user who already belongs to a household — including one auto-created at first sign-in (§7.1).
+
 ## 3. Core Algorithms & Security Engine
 
-### 3.1 Base-31 Account ID Generator (`PocketMoney.Shared/Utilities/Base31Generator.cs`)
+### 3.1 Base-31 Account ID Generator (`PocketMoney.Application`)
 
-Excludes `O`, `I`, `S`, `U`, and `Q` to prevent visual confusion.
+Excludes `O`, `I`, `S`, `U`, and `Q` to prevent visual confusion. Generation is server-side only, during child profile creation (FR-P3); the client merely displays the ID. Uniqueness collisions are retried by the caller — the unique index on `children.account_id` (§2.4) is the final guarantee.
 
 ```csharp
+namespace PocketMoney.Application;
+
 public static class Base31Generator
 {
     private static readonly byte AccountIdLength = Constants.Child.AccountIdLength;
@@ -541,10 +614,11 @@ public async Task<TransactionResultDto> CreateTransactionAsync(CreateTransaction
 ## 5. Parent Invitation Flow (SendGrid + Firebase)
 
 1. **Invite Request:** Parent 1 submits Parent 2’s email via `POST /api/v1/households/invite`.
-2. **Token Generation:** Backend verifies Household parent count < 2, creates a `HouseholdInvitation` record with an encrypted token, and dispatches an invitation email using SendGrid.
+2. **Token Generation:** Backend verifies Household parent count < `Constants.MaxParentsPerHousehold` **and no pending invitation exists** (unaccepted and unexpired); otherwise rejects with `409 Conflict`. Then creates a `HouseholdInvitation` record with an encrypted token, and dispatches an invitation email using SendGrid.
 3. **Acceptance:** Parent 2 clicks link (`[https://pocketmoney.app/accept-invite?token=](https://pocketmoney.app/accept-invite?token=)...`).
 4. **Auth Link:** Parent 2 logs in or registers via Firebase Auth on Blazor WASM.
-5. **Linking:** Backend validates invitation token, links Parent 2's Firebase UID to the existing `HouseholdId`, and logs the event in `AuditLog`.
+5. **Linking:** Backend validates the invitation token **and re-checks the cap inside the same database transaction**: current parent count is still < `MaxParentsPerHousehold`, and the accepting Firebase UID does not already belong to any household (§2.4). Re-checking at acceptance closes the race where two outstanding invitations could otherwise produce 3 parents. On success: links Parent 2's Firebase UID to the existing `HouseholdId` and logs the event in `AuditLog`; on failure: `409 Conflict`.
+6. **UI rule:** the "Invite another parent" action is hidden/disabled whenever the household already has 2 parents **or a pending invitation exists**. The button state is a convenience — the server-side `409` checks in steps 2 and 5 are the authority.
 
 ## 6. Frontend State & Shared Device Guard (Blazor WASM)
 
@@ -591,7 +665,7 @@ public class InactivityTimerService : IDisposable
 | `PUT` | `/api/v1/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
 | `PUT` | `/api/v1/parents/me/pin` | Parent JWT | Updates a parent PIN |
 | `POST` | `/api/v1/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
-| `GET` | `/api/v1/transactions/child/{id}` | Parent / Child | Returns timeline sorted `created_at DESC` |
+| `GET` | `/api/v1/transactions/child/{id}` | Parent / Child | Keyset-paginated timeline, `created_at DESC` (§12). Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history |
 
 ### 7.2 SignalR Hub (`/hubs/ledger`)
 
@@ -696,14 +770,14 @@ V1 will NOT implement the followings:
 
 ## 11. Database Migration Strategy
 
-Schema evolves via **EF Core Code-First migrations** (`PocketMoney.Infrastructure/Migrations/`). The database is never hand-edited; the migration history is the source of truth for schema state.
+Schema evolves via **EF Core Code-First migrations** (`PocketMoney.Persistence`). The database is never hand-edited; the migration history is the source of truth for schema state.
 
 ### 11.1 Conventions
 
 * **One logical change = one migration.** Descriptive imperative names: `AddChildrenSecurityStamp`, `AddIpBanBanCount`.
 * Applied migrations are **immutable**: a shipped migration is never edited or deleted. Wrong step → ship a corrective migration on top.
 * **No `EnsureCreated()`** — only `Migrate()`.
-* Every schema change — including index additions (e.g. the `(child_id, created_at)` timeline index) — goes through a migration.
+* Every schema change — including index additions (e.g. the `(child_id, created_at DESC, id DESC)` timeline index) — goes through a migration.
 * Migrations are applied in CI/CD at deploy time (or via an explicit release step), with a database backup taken immediately before.
 
 ### 11.2 Append-Only Table Protection
@@ -734,3 +808,91 @@ Any migration that must rename or retype a column on an append-only table is a r
 
 * Each new migration must run cleanly against both (a) a fresh database and (b) a copy of the current production schema — enforced in CI.
 * Destructive-looking operations (`DropTable`, `DropColumn`) outside the append-only carve-outs in §11.2 require explicit reviewer sign-off in the PR.
+
+## 12. Timeline Pagination (Keyset / Cursor)
+
+Transaction volume grows unbounded (NFR-3 budgets 10,000 rows per child). Both the child timeline and parent views fetch **pages, never the full ledger**. Balances are unaffected — they come from the cached `current_balance`, not from scanning transactions.
+
+### 12.1 Why Keyset, Not Offset
+
+* **Concurrent inserts don't disturb paging.** A parent logging a transaction while a timeline is being scrolled cannot shift pages (offset paging would duplicate or skip rows).
+* **Constant page cost.** Every page is an index range scan on `(child_id, created_at DESC, id DESC)` — the NFR-3 200ms budget holds at any depth.
+* **Natural fit for infinite scroll** and for SignalR pushes, which prepend new rows at the top without invalidating the cursor below.
+
+### 12.2 API Contract
+
+```text
+GET /api/v1/transactions/child/{id}?cursor={opaque}&pageSize=25
+
+200 → {
+  "items": [ ... up to pageSize rows ... ],
+  "nextCursor": "..." | null
+}
+```
+
+* **Cursor:** opaque, URL-safe encoding of the `(created_at, id)` keyset of the **last row returned**. Clients treat it as a black box — never parsed, constructed, or cached across households.
+* **First page:** omit `cursor`.
+* **`pageSize`:** default `Constants.Timeline.DefaultPageSize` (25); values above `MaxPageSize` (100) are clamped server-side, invalid values rejected with `400`.
+* **Ordering:** strictly `created_at DESC`, `id DESC` (tiebreaker for identical timestamps — required so pages never gap or duplicate).
+* **No total count.** Keyset paging needs no `COUNT(*)`, and no UI element requires it.
+
+### 12.3 End-of-History Signal (Client Stop Rule)
+
+The server is the **sole authority** on whether more records exist. The client never probes, guesses, or counts.
+
+* The server sets `"nextCursor": null` on the final page (including the case where the last page happens to be exactly full).
+* **Client rule:** after rendering a page, if `nextCursor` is `null` the client:
+  1. marks the timeline **exhausted** in local state,
+  2. renders an explicit end affordance (e.g. "End of history"), and
+  3. **permanently disables further fetches** for this timeline — scroll-to-bottom no longer triggers requests. This state persists until the timeline is reloaded from page 1.
+* Conversely, a page with fewer than `pageSize` items is **not** itself the stop signal — only `nextCursor: null` is. (The server will also return `null` whenever the remainder was exhausted, so the two agree in practice.)
+* Result: a child with 50 transactions loads exactly 2 pages and then never touches the server for that timeline again — no "just check if there's more" polling, ever.
+
+### 12.4 SignalR Interaction
+
+* Pushed `OnBalanceUpdated` transactions are **prepended** to the in-memory page 1 view; the active cursor (anchored deeper in history) is untouched.
+* If the client is not on page 1 when a push arrives, it prepends a visible "new activity" marker rather than silently re-sorting the rendered list.
+
+### 12.5 Client Behavior (Blazor WASM)
+
+* Infinite scroll: fetch the next page when the user nears the bottom (intersection observer), one request in flight at a time.
+* Both parent (per-child drill-down) and child timelines use the same endpoint and the same stop rule from §12.3.
+* Page 1 and the exhausted-flag are kept in the per-child timeline state so tab switches and back-navigation don't refetch.
+
+## 13. Testing Strategy
+
+Three test projects (§1.3, `Tests/`) — each tier is tested with the strategy matching its risk profile. All tests run in CI on every PR; merges are blocked on failure.
+
+### 13.1 `PocketMoney.Application.Test` — Unit Tests (the core)
+
+All business rules live in the Application tier and are tested **without a database** (in-memory fakes for repository interfaces):
+
+* Base-31 Account ID generation: alphabet/length conformance, uniqueness-retry behavior
+* Lockout ladder: 3 → 5 min, 6 → 15 min, 9 → permanent; counter resets on successful login
+* IP-ban ladder: 10 failures in 24h → 1 day, then 7 days, then 30 days
+* Transaction math: credit/debit balance updates, negative-balance rejection, `remaining_after` snapshot
+* Parent cap: invite rejected at 2 parents or with a pending invitation; acceptance re-check race (§5)
+* Input validation rules (§9): trim, max length, allowed-character whitelists, decimal-scale rejection
+
+This project carries the highest coverage target — a bug here corrupts the ledger.
+
+### 13.2 `PocketMoney.Api.Test` — Integration Tests
+
+Run against a **real PostgreSQL** via Testcontainers (never mocked) so EF Core, migrations, and actual database constraints are exercised:
+
+* Endpoint contract tests per §7.1, including error paths (`400`, `401`, `409`)
+* Auth middleware: Firebase ID-token verification, child JWT + security-stamp rotation (§3.2)
+* Household scoping: no session can read/write outside its own `household_id` (§10)
+* Concurrency: two parallel debits against one child serialize to a correct result (§4)
+* Timeline pagination contract: cursor stability, `nextCursor: null` end-of-history signal (§12)
+
+### 13.3 `PocketMoney.Client.Test` — Blazor Component Tests (bUnit)
+
+* PIN pad: input handling, wrong-PIN feedback
+* Inactivity timer: 5-minute lock trigger, reset on interaction (FR-P6)
+* Timeline exhausted-flag stop rule: no further fetches after `nextCursor: null` (§12.3)
+* Shared-device guard: "Switch to Parent" flow behind the Parent PIN modal (FR-S1)
+
+### 13.4 Frameworks & Packages
+
+Test frameworks and libraries are listed in §1.5; versions are pinned centrally via `Directory.Packages.props` (§1.2).

@@ -1,0 +1,111 @@
+# **Pocket‑Money V1 — SRS ↔ SDS Traceability Matrix**
+
+This matrix ensures every requirement in the **Software Requirements Specification (SRS v1.0)** is fully implemented and traceable in the **Software Design Specification (SDS v1.0)**.
+
+**Legend:**
+
+- **FR‑P\*** → Parent Functional Requirements  
+- **FR‑C\*** → Child Functional Requirements  
+- **FR‑S\*** → Shared Device / Security Requirements  
+- **NFR‑\*** → Non‑Functional Requirements  
+- **DS‑\*** → SDS Section Reference  
+
+## 1. Parent Management & Onboarding (FR‑P)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| **FR‑P1** Parent login via Firebase | DS §1.1, §1.4, §7.1 (Firebase Auth integration) |
+| Initial household setup (currency + PIN) | DS §7.1 (`PUT /households/{id}/settings`), DS §2.3 Household fields |
+| Only first parent can delete household | DS §7.1 (`DELETE /households`), DS §8 Audit logging |
+| Physical deletion except audit logs | DS §7.1, DS §8 (append‑only audit log) |
+| **FR‑P2** Max 2 parents | DS §2.1 `MaxParentsPerHousehold = 2`, DS §5 invitation flow |
+| Parent invitation flow | DS §5 (SendGrid + token + Firebase) |
+| Parent cannot remove other parent | DS §5 (no endpoint exists) |
+| Parent cannot remove self | DS §5 (no endpoint exists) |
+| **FR‑P3** Create child profiles (max 9) | DS §2.1 `ChildrenMax = 9`, DS §7.1 (`POST /children`) |
+| Base‑31 Account ID generation | DS §3.1 Base31Generator |
+| Account ID uniqueness | DS §2.4 unique index, DS §3.1 retry logic |
+| Initial random PIN | DS §7.1 child creation flow |
+| **FR‑P4** Child PIN reset | DS §7.1 (`PUT /children/{id}/pin`), DS §3.2 token invalidation |
+| **FR‑P5** Transaction logging | DS §4 atomic transaction logic |
+| Negative balance rejection | DS §4 (rollback on `< 0`) |
+| Append‑only ledger | DS §2.3 Transaction entity, DS §4 |
+| Concurrency control | DS §4 (`FOR UPDATE` row lock) |
+| **FR‑P6** Immutable ledger | DS §4 (no edit/delete), DS §7.1 (no endpoints) |
+| Parent inactivity lock (5 min) | DS §2.1 `ParentInactivityLockMs`, DS §6 InactivityTimerService |
+
+## 2. Child Interface & View (FR‑C)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| **FR‑C1** Child login via Account ID + PIN | DS §7.1 (`POST /auth/child/login`) |
+| **FR‑C2** Persistent 365‑day token | DS §2.1 `TokenLifetimeDays = 365`, DS §3.2 token validation |
+| Logout invalidates token | DS §3.2 (security stamp mismatch forces re‑auth) |
+| Unsuccessful login attempts not reset on logout | DS §3.3 lockout logic |
+| **FR‑C3** Dashboard shows name + balance | DS §2.3 Child entity, DS §7.1 timeline endpoint |
+| **FR‑C4** Transaction timeline sorted DESC | DS §2.4 Transaction index (DESC), DS §7.1 keyset pagination |
+
+## 3. Shared Device Guard & Security (FR‑S)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| **FR‑S1** Parent PIN modal | DS §6 Shared Device Guard |
+| **FR‑S2** Strict data isolation | DS §7.2 SignalR group isolation, DS §7.1 child‑scoped endpoints |
+
+## 4. Non‑Functional Requirements (NFR)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| **NFR‑1** Atomicity | DS §4 EF transaction + `FOR UPDATE` |
+| **NFR‑2** Responsive UI | DS §1.1 Blazor WASM, DS §6 UI behavior |
+| **NFR‑3** Timeline performance | DS §2.4 composite index `(childId, createdAt, Id DESC)` |
+| **NFR‑4** PIN hashing | DS §2.3 Parent.PinHash, Child.PinHash |
+| Record all unsuccessful login attempts | DS §3.3 LoginAttempt entity |
+| Lockout ladder (3→5m, 6→15m, 9→permanent) | DS §2.1 Lockout constants, DS §3.3 logic |
+| Parent unlocks child account | DS §7.1 child PIN reset resets lockout |
+| IP ban (10 failures → 24h, 1w, 1m) | DS §2.1 IpBan constants, DS §3.3 logic |
+| IP ban does not block static assets | DS §3.3 (ban applies only to auth endpoints) |
+
+## 5. Audit Logging (SRS §7)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| Append‑only | DS §2.3 AuditLog entity |
+| No edit/delete | DS §8 AuditService |
+| Log parent PIN changes | DS §8 |
+| Log child PIN resets | DS §8 |
+| Log child creation | DS §8 |
+| Log household settings changes | DS §8 |
+| Log household deletion | DS §8 |
+
+## 6. Timezone Handling (SRS §8)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| Store timestamps in UTC | DS §2.3 all entities use `DateTime.UtcNow` |
+| UI displays local time | DS §6 (client-side responsibility) |
+
+## 7. Input Validation (SRS §9)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| Trim & sanitize | DS §9.1 |
+| Max lengths | DS §9.2 + EF constraints |
+| Allowed characters | DS §9.2 regex + whitelist |
+| Decimal precision rules | DS §2.4 precision definitions |
+| Trailing zeros based on decimal_digits | DS §2.3 Household.DecimalDigits |
+
+## 8. Out‑of‑Scope Items (SRS §10)
+
+SDS correctly excludes:
+
+- Interest accrual  
+- Savings goals  
+- Notifications  
+- Bank integration  
+- Transaction editing  
+
+## Final Assessment
+
+SDS provides **full coverage** of the SRS.  
+This traceability matrix shows **complete compliance** and is ready for engineering review, QA validation, and release documentation.
