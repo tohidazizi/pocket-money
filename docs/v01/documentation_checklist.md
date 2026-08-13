@@ -8,11 +8,12 @@
 
 ## 2. Architecture & Design
 
-- [.] System Architecture Design Document (ADD)
-- [.] Software Design Specification (SDS)
-  - Also called a Software Design Document (SDD) or Low-Level Design (LLD). translates high-level architecture into precise implementation instructions for developers. While architecture focuses on the macro view (how systems interact), the design specification focuses on the micro view (how modules, classes, and functions operate)
+- [X] System Architecture Design Document (SAD)
+- [X] Software Design Specification (SDS)
+- [X] SRS ↔ SDS Traceability Matrix
+- [X] SAD ↔ SDS Traceability Matrix
 - [  ] Database Schema / Entity-Relationship Diagrams
-- [  ] API Specifications (OpenAPI/Swagger)
+- [  ] API Specifications
 - [.] UI Prototype
 
 ## 3. Implementation & Code

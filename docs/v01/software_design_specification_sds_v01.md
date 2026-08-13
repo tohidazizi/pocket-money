@@ -111,7 +111,7 @@ The API reads all environment-specific values from configuration providers (envi
 Rules:
 
 * Secrets live in the host's secret store / environment variables; `.env` files and connection strings are git-ignored.
-* Each environment (dev / staging / prod) gets its own database and its own secret set. Hosting provider is undecided (ADD §10), so the concrete mechanism is deferred — the contract above is what the code depends on.
+* Each environment (dev / staging / prod) gets its own database and its own secret set. Hosting provider is undecided (SAD §10), so the concrete mechanism is deferred — the contract above is what the code depends on.
 
 ### 1.5 Third party free packages to use
 

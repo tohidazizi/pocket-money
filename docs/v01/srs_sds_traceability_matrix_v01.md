@@ -43,14 +43,14 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | Logout invalidates token | DS §3.2 (security stamp mismatch forces re‑auth) |
 | Unsuccessful login attempts not reset on logout | DS §3.3 lockout logic |
 | **FR‑C3** Dashboard shows name + balance | DS §2.3 Child entity, DS §7.1 timeline endpoint |
-| **FR‑C4** Transaction timeline sorted DESC | DS §2.4 Transaction index (DESC), DS §7.1 keyset pagination |
+| **FR‑C4** Transaction timeline sorted DESC | DS §2.4 Transaction index (DESC), DS §7.1 timeline endpoint, DS §12 keyset pagination |
 
 ## 3. Shared Device Guard & Security (FR‑S)
 
 | **SRS Requirement** | **SDS Implementation** |
 | ------------------- | ---------------------- |
 | **FR‑S1** Parent PIN modal | DS §6 Shared Device Guard |
-| **FR‑S2** Strict data isolation | DS §7.2 SignalR group isolation, DS §7.1 child‑scoped endpoints |
+| **FR‑S2** Strict data isolation | DS §10 Multi-Tenant Enforcement, DS §7.2 SignalR group isolation, DS §7.1 child‑scoped endpoints |
 
 ## 4. Non‑Functional Requirements (NFR)
 
@@ -93,7 +93,7 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | Max lengths | DS §9.2 + EF constraints |
 | Allowed characters | DS §9.2 regex + whitelist |
 | Decimal precision rules | DS §2.4 precision definitions |
-| Trailing zeros based on decimal_digits | DS §2.3 Household.DecimalDigits |
+| Trailing zeros based on decimal_digits | DS §9.5 Trailing-Zero Display, DS §2.3 Household.DecimalDigits |
 
 ## 8. Out‑of‑Scope Items (SRS §10)
 
