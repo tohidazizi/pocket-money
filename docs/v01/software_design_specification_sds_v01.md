@@ -331,7 +331,7 @@ public sealed class Household
     // Currency new child profiles inherit at creation (§2.1.1).
     public string DefaultCurrencyKey { get; set; } = CurrencyType.PointKey;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     // Navigation Properties
     public ICollection<Parent> Parents { get; set; } = new List<Parent>();
@@ -348,7 +348,7 @@ public sealed class Parent
     public string? DisplayName { get; set; }
     public string Email { get; set; } = string.Empty;
     public string ParentPinHash { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Household Household { get; set; } = null!;
 }
@@ -370,12 +370,12 @@ public sealed class Child
     public decimal CurrentBalance { get; set; } = 0.000m;
     public string CreatorId { get; set; } = string.Empty;
     public byte UnsuccessfulLoginAttempts { get; set; } = 0;
-    public DateTime? LockedUntil { get; set; }
-    public bool IsPermanentlyLocked => LockedUntil == DateTime.MaxValue;
+    public DateTimeOffset? LockedUntil { get; set; }
+    public bool IsPermanentlyLocked => LockedUntil == DateTimeOffset.MaxValue;
     
     // Security Stamp changes on PIN reset to invalidate active 365-day tokens
     public Guid SecurityStamp { get; set; } = Guid.NewGuid(); 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Household Household { get; set; } = null!;
     public Parent Creator { get; set; } = null!;
@@ -398,7 +398,7 @@ public sealed class Transaction
     public string Reason { get; set; } = string.Empty;
     public decimal RemainingAfter { get; set; }
     public string CreatorId { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Household Household { get; set; } = null!;
     public Child Child { get; set; } = null!;
@@ -413,7 +413,7 @@ public sealed class LoginAttempt
     public string IpAddress { get; set; } = string.Empty;
     public string HttpRequestInfo { get; set; } = string.Empty;
     public bool IsSuccessful { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 // 6. Global IP Ban
@@ -422,9 +422,9 @@ public sealed class IpBan
     public Guid Id { get; set; } = Guid.NewGuid();
     public string IpAddress { get; set; } = string.Empty;
     public int BanCount { get; set; } = 1;
-    public DateTime BannedUntil { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAt { get; set; }
+    public DateTimeOffset BannedUntil { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? UpdatedAt { get; set; }
 }
 
 // 7. Household Invitation (Parent 2 Flow)
@@ -436,8 +436,8 @@ public sealed class HouseholdInvitation
     public string TokenHash { get; set; } = string.Empty;
     public string InvitedByParentId { get; set; } = string.Empty;
     public bool IsAccepted { get; set; } = false;
-    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(7);
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddDays(7);
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Household Household { get; set; } = null!;
     public Parent InvitedByParent { get; set; } = null!;
@@ -453,7 +453,7 @@ public sealed class AuditLog
     public AuditEventType EventType { get; set; }
     public string? DetailsJson { get; set; }
     public string? IpAddress { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 ```
@@ -618,7 +618,7 @@ public async Task HandleFailedLoginAsync(string accountId, ClientInfo clientInfo
 
     // 2. Check Global IP Ban threshold (NFR-4): IpBan.FailureThreshold failures
     //    from one IP within IpBan.FailureWindowHours, across any child account
-    var windowStart = DateTime.UtcNow.AddHours(-Constants.IpBan.FailureWindowHours);
+    var windowStart = DateTimeOffset.UtcNow.AddHours(-Constants.IpBan.FailureWindowHours);
     var ipFailures = await _dbContext.LoginAttempts
         .CountAsync(l => l.IpAddress == clientInfo.IpAddress && !l.IsSuccessful && l.CreatedAt >= windowStart);
 
@@ -627,18 +627,18 @@ public async Task HandleFailedLoginAsync(string accountId, ClientInfo clientInfo
         var existingBan = await _dbContext.IpBans.FirstOrDefaultAsync(b => b.IpAddress == clientInfo.IpAddress);
         int banCount = (existingBan?.BanCount ?? 0) + 1;
 
-        DateTime bannedUntil = banCount switch
+        DateTimeOffset bannedUntil = banCount switch
         {
-            1 => DateTime.UtcNow.AddDays(Constants.IpBan.FirstBanDays),   // 24 hours
-            2 => DateTime.UtcNow.AddDays(Constants.IpBan.SecondBanDays),  // 1 week
-            _ => DateTime.UtcNow.AddDays(Constants.IpBan.ThirdBanDays)    // 1 month
+            1 => DateTimeOffset.UtcNow.AddDays(Constants.IpBan.FirstBanDays),   // 24 hours
+            2 => DateTimeOffset.UtcNow.AddDays(Constants.IpBan.SecondBanDays),  // 1 week
+            _ => DateTimeOffset.UtcNow.AddDays(Constants.IpBan.ThirdBanDays)    // 1 month
         };
 
         if (existingBan != null)
         {
             existingBan.BanCount = banCount;
             existingBan.BannedUntil = bannedUntil;
-            existingBan.UpdatedAt = DateTime.UtcNow;
+            existingBan.UpdatedAt = DateTimeOffset.UtcNow;
         }
         else
         {
@@ -653,15 +653,15 @@ public async Task HandleFailedLoginAsync(string accountId, ClientInfo clientInfo
 
         if (child.UnsuccessfulLoginAttempts >= Constants.Lockout.PermanentLockThreshold)
         {
-            child.LockedUntil = DateTime.MaxValue; // IsPermanentlyLocked derives from this
+            child.LockedUntil = DateTimeOffset.MaxValue; // IsPermanentlyLocked derives from this
         }
         else if (child.UnsuccessfulLoginAttempts == Constants.Lockout.MaxFailedAttemptsPerLockout * 2)
         {
-            child.LockedUntil = DateTime.UtcNow.AddMinutes(Constants.Lockout.SecondLockoutMinutes);
+            child.LockedUntil = DateTimeOffset.UtcNow.AddMinutes(Constants.Lockout.SecondLockoutMinutes);
         }
         else if (child.UnsuccessfulLoginAttempts == Constants.Lockout.MaxFailedAttemptsPerLockout)
         {
-            child.LockedUntil = DateTime.UtcNow.AddMinutes(Constants.Lockout.FirstLockoutMinutes);
+            child.LockedUntil = DateTimeOffset.UtcNow.AddMinutes(Constants.Lockout.FirstLockoutMinutes);
         }
     }
 
@@ -826,7 +826,7 @@ public class AuditService : IAuditService
             EventType = eventType,
             DetailsJson = details != null ? JsonSerializer.Serialize(details) : null,
             IpAddress = ipAddress,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         _db.AuditLogs.Add(log);

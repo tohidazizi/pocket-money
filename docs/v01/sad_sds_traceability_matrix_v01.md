@@ -89,7 +89,7 @@ This matrix ensures that every architectural decision, flow, and component descr
 | Performance | SDS §2.4 DESC index, §7.1 keyset pagination |
 | Security | SDS §3.2, §3.3, §9 |
 | Auditability | SDS §8 |
-| Timezone | SDS §2.3 (`DateTime.UtcNow` on all entities), §9.5 (client renders local time) |
+| Timezone | SDS §2.3 (`DateTimeOffset.UtcNow` on all entities), §9.5 (client renders local time) |
 | Testing | SDS §13 |
 
 ✔ Fully aligned.

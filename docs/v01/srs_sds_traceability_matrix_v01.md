@@ -85,7 +85,7 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 
 | **SRS Requirement** | **SDS Implementation** |
 | ------------------- | ---------------------- |
-| Store timestamps in UTC | DS §2.3 all entities use `DateTime.UtcNow` |
+| Store timestamps in UTC | DS §2.3 all entities use `DateTimeOffset.UtcNow` |
 | UI displays local time | DS §6 (client-side responsibility) |
 
 ## 7. Input Validation (SRS §9)
