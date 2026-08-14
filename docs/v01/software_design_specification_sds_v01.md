@@ -348,6 +348,9 @@ public sealed class Parent
     public string? DisplayName { get; set; }
     public string Email { get; set; } = string.Empty;
     public string ParentPinHash { get; set; } = string.Empty;
+
+    // Earliest Parent.CreatedAt in the household identifies the household
+    // owner — the only parent who may delete it (FR-P1, §7.1 DELETE).
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Household Household { get; set; } = null!;
@@ -562,6 +565,8 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 ```
 
 **One parent — one household:** a Firebase UID can belong to at most one household, ever (enforced by `ParentConfiguration` above and re-checked at invitation acceptance, §5). Consequently, `accept-invite` must reject any Firebase user who already belongs to a household — including one auto-created at first sign-in (§7.1).
+
+**Household owner (FR-P1):** `DELETE /api/v1/household` is owner-only. The owner is the parent with the earliest `Parent.CreatedAt` in the household — the first parent, who auto-created the household at first sign-in (§7.1.2). The second parent always joins later via invitation (§5), so the ordering is unambiguous. Non-owner deletion attempts are rejected with `403` (§7.1.1).
 
 ## 3. Core Algorithms & Security Engine
 
@@ -778,19 +783,54 @@ public class InactivityTimerService : IDisposable
 | `POST` | `/api/v1/auth/child/login` | Public | Authenticates child via Base31 Account ID + PIN |
 | `GET` | `/api/v1/household` | Parent JWT | Gets Household info, children in list with their current balance, for the parent landing page |
 | `PUT` | `/api/v1/household/settings` | Parent JWT | Sets household settings: display name & default currency (§2.1.1) |
-| `DELETE` | `/api/v1/household` | Parent JWT | Physical deletion of household (Owner parent only) |
+| `DELETE` | `/api/v1/household` | Parent JWT | Physical deletion of the household — **owner parent only** (§2.3) |
 | `POST` | `/api/v1/household/invite` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
 | `POST` | `/api/v1/household/accept-invite` | Firebase JWT | Links 2nd parent to household |
-| `POST` | `/api/v1/household/children` | Parent JWT | Creates child profile & generates Base31 Account ID; child inherits `Household.DefaultCurrencyKey` |
+| `POST` | `/api/v1/household/children` | Parent JWT | Creates child profile & generates Base31 Account ID; child inherits `Household.DefaultCurrencyKey`. The generated initial PIN is returned **only once** — in this creation response — and is never retrievable afterwards |
 | `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
 | `PUT` | `/api/v1/household/children/{id}/currency` | Parent JWT | Changes a child's currency (§2.1.1): balance carries over numerically, ledger rows keep their original currency snapshot; audit-logged as `ChildCurrencyChanged` |
 | `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Updates a parent PIN |
-| `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by `childId`, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason; Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
+| `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by `childId`, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason (case-insensitive substring); Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
 | `GET` | `/api/v1/household/children/me` | Child JWT | Returns the calling child's own profile: `displayName`, `currentBalance`, and resolved currency info (§2.1.1) — the child dashboard source (FR-C3) |
 | `POST` | `/api/v1/household/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
 
 \* First parent very first time log-in triggers creating a household, so there is no explicit API to create household.
 \*\* A child can only gets his/her transactions; Parent can see any transaction in the household.
+
+#### 7.1.1 HTTP Status Mapping
+
+The endpoint table defines operations; this section fixes the HTTP status each outcome returns. Error bodies follow the common shape specified in the API Specification §1.4 (`{ "error": { "code", "message" } }`).
+
+| Status | Codes used | Defined in |
+| --- | --- | --- |
+| `400` | `validation_error` | §9 violations: length, characters, format, decimal scale, unknown currency key |
+| `401` | `invalid_credentials`, `token_invalid`, `token_expired`, `security_stamp_mismatch` | Child auth failure (§3.2 stale stamp → `401`); parent PIN mismatch on `PUT /household/parents/me/pin` |
+| `403` | `ip_banned`, `owner_only` | IP ban (§3.3); non-owner household deletion (§2.3) |
+| `404` | `not_found` | Missing resource, or resource outside caller's household (never `403`, to avoid leaking existence) |
+| `409` | `parent_cap_reached`, `invitation_pending`, `already_in_household`, `invitation_invalid`, `invitation_expired`, `children_max_reached` | Invitation flow (§5); child cap (§2.1) |
+| `422` | `negative_balance_not_acceptable` | Business-rule rejection after validation — DEBIT below zero (§4) |
+| `423` | `account_locked`, `account_permanently_locked` | Child lockout ladder (§2.1 Lockout, §3.3); timed tiers carry `lockedUntil` |
+
+* `422` marks a well-formed request that domain logic rejects (§4 negative balance) — distinct from `400`, which marks malformed input (§9).
+* `423` (Locked, WebDAV origin) is chosen over `429 Too Many Requests`: the account is locked, not merely rate-limited — a correct PIN would still fail until the tier expires (or, for permanent lock, until a parent PIN reset, §3.3).
+* The PIN is not brute-forceable anyway: each attempt is metered (§3.3) and the lockout ladder caps effective attempts per window.
+
+#### 7.1.2 Parent Onboarding Flow
+
+Households have no creation endpoint (footnote \* above); they are auto-created server-side on a parent's **first** Firebase sign-in. The two paths:
+
+**First parent (household creator):**
+
+1. Firebase sign-in → the backend creates the `Household` and the `Parent` record (owner per §2.3).
+2. Onboarding step 1 — `PUT /api/v1/household/settings`: household display name + default currency (FR-P1).
+3. Onboarding step 2 — `PUT /api/v1/household/parents/me/pin`: establish the 4-digit Parent Lock PIN (FR-P1).
+
+**Second parent (invited, §5):**
+
+1. Accepts the invitation → Firebase UID linked to the existing household (`ParentJoined` audit event).
+2. Onboarding — `PUT /api/v1/household/parents/me/pin` only; household settings already exist.
+
+The API exposes no onboarding state; the client infers its onboarding step from API responses (absent settings, missing PIN).
 
 ### 7.2 SignalR Hub (`/hubs/ledger`)
 
@@ -806,6 +846,11 @@ public class LedgerHub : Hub
 }
 
 ```
+
+`OnBalanceUpdated` is pushed to group `child_{id}` after **every** server-side change to a child's balance or currency:
+
+* after a committed `CREDIT`/`DEBIT` (§4), and
+* after a currency change (§2.1.1) — no balance value changes, but the child dashboard must re-render the carried-over balance in the new denomination.
 
 ## 8. Audit Logging Schema & Event Tracking
 
@@ -956,7 +1001,7 @@ GET /api/v1/household/transactions?childId={id}&cursor={opaque}&pageSize=25
 }
 ```
 
-* **Filters first, then paging:** all §7.1 filters (`childId`, type, date range, amount range, reason search) are applied **before** keyset paging; the cursor encodes the `(created_at, id)` of the last row *within the filtered set*, and must always be sent back with the same filter values.
+* **Filters first, then paging:** all §7.1 filters (`childId`, type, date range, amount range, reason search — case-insensitive substring) are applied **before** keyset paging; the cursor encodes the `(created_at, id)` of the last row *within the filtered set*, and must always be sent back with the same filter values.
 * **Cursor:** opaque, URL-safe encoding of the `(created_at, id)` keyset of the **last row returned**. Clients treat it as a black box — never parsed, constructed, or cached across households.
 * **First page:** omit `cursor`.
 * **`pageSize`:** default `Constants.Timeline.DefaultPageSize` (25); values above `MaxPageSize` (100) are clamped server-side, invalid values rejected with `400`.
