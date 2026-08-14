@@ -35,7 +35,9 @@ This matrix ensures that every architectural decision, flow, and component descr
 | Max 2 parents | SDS §2.1 `MaxParentsPerHousehold = 2`, SDS §5 invitation flow |
 | Max 9 children | SDS §2.1 `ChildrenMax = 9`, SDS §7.1 child creation |
 | Append-only ledger | SDS §2.3 Transaction entity, §4 atomic insert |
-| Keyset pagination | SDS §7.1 timeline endpoint, §2.4 DESC index |
+| Per-row currency snapshot keeps history's denomination | SDS §2.3 `Transaction.CurrencyKey`, §4 |
+| Child-scoped read endpoints (`children/me`, transactions) | SDS §7.1, §10 layer 3 |
+| Keyset pagination | SDS §7.1 timeline endpoint, §12 |
 | RLS out of scope | SDS §10 (Out of Scope) |
 
 ✔ Fully aligned.
@@ -62,6 +64,7 @@ This matrix ensures that every architectural decision, flow, and component descr
 | `FOR UPDATE` row lock | SDS §4 (`SELECT ... FOR UPDATE`) |
 | Negative balance rollback | SDS §4 (`newBalance < 0 → rollback`) |
 | Append-only insert | SDS §2.3 Transaction entity, §4 |
+| Currency snapshot per ledger row | SDS §4 (`CurrencyKey = child.CurrencyKey`) |
 | Update `current_balance` | SDS §4 |
 | SignalR broadcast | SDS §4 (`OnBalanceUpdated`) |
 
@@ -86,7 +89,7 @@ This matrix ensures that every architectural decision, flow, and component descr
 | Performance | SDS §2.4 DESC index, §7.1 keyset pagination |
 | Security | SDS §3.2, §3.3, §9 |
 | Auditability | SDS §8 |
-| Timezone | SDS §8 |
+| Timezone | SDS §2.3 (`DateTime.UtcNow` on all entities), §9.5 (client renders local time) |
 | Testing | SDS §13 |
 
 ✔ Fully aligned.
@@ -103,8 +106,9 @@ This matrix ensures that every architectural decision, flow, and component descr
 | Append-only ledger | SDS §2.3 |
 | Parent PIN lock | SDS §6 |
 | SignalR push | SDS §4 |
-| Keyset pagination | SDS §7.1 |
+| Keyset pagination | SDS §7.1, §12 |
 | No RLS in V1 | SDS §10 |
+| Per-child currency + ledger snapshots (AD-11) | SDS §2.1.1, §2.3, §4 |
 
 ✔ Perfect match.
 

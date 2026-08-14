@@ -15,18 +15,20 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | **SRS Requirement** | **SDS Implementation** |
 | ------------------- | ---------------------- |
 | **FR‑P1** Parent login via Firebase | DS §1.1, §1.4, §7.1 (Firebase Auth integration) |
-| Initial household setup (currency + PIN) | DS §7.1 (`PUT /households/{id}/settings`), DS §2.3 Household fields |
-| Only first parent can delete household | DS §7.1 (`DELETE /households`), DS §8 Audit logging |
+| Initial household setup (default currency + PIN) | DS §7.1 (`PUT /api/v1/household/settings`), DS §2.3 `Household.DefaultCurrencyKey`, DS §2.1.1 CurrencyType |
+| Only first parent can delete household | DS §7.1 (`DELETE /api/v1/household`), DS §8 Audit logging |
 | Physical deletion except audit logs | DS §7.1, DS §8 (append‑only audit log) |
 | **FR‑P2** Max 2 parents | DS §2.1 `MaxParentsPerHousehold = 2`, DS §5 invitation flow |
 | Parent invitation flow | DS §5 (SendGrid + token + Firebase) |
 | Parent cannot remove other parent | DS §5 (no endpoint exists) |
 | Parent cannot remove self | DS §5 (no endpoint exists) |
-| **FR‑P3** Create child profiles (max 9) | DS §2.1 `ChildrenMax = 9`, DS §7.1 (`POST /children`) |
+| **FR‑P3** Create child profiles (max 9) | DS §2.1 `ChildrenMax = 9`, DS §7.1 (`POST /api/v1/household/children`) |
 | Base‑31 Account ID generation | DS §3.1 Base31Generator |
 | Account ID uniqueness | DS §2.4 unique index, DS §3.1 retry logic |
 | Initial random PIN | DS §7.1 child creation flow |
-| **FR‑P4** Child PIN reset | DS §7.1 (`PUT /children/{id}/pin`), DS §3.2 token invalidation |
+| New child inherits household default currency | DS §2.3 `Child.CurrencyKey`, DS §2.1.1 |
+| **FR‑P4** Child PIN reset | DS §7.1 (`PUT /api/v1/household/children/{id}/pin`), DS §3.2 token invalidation |
+| **FR‑P7** Child currency change | DS §7.1 (`PUT /api/v1/household/children/{id}/currency`), DS §2.1.1, DS §4 (`CurrencyKey` snapshot per ledger row), DS §8 (`ChildCurrencyChanged`) |
 | **FR‑P5** Transaction logging | DS §4 atomic transaction logic |
 | Negative balance rejection | DS §4 (rollback on `< 0`) |
 | Append‑only ledger | DS §2.3 Transaction entity, DS §4 |
@@ -42,8 +44,8 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | **FR‑C2** Persistent 365‑day token | DS §2.1 `TokenLifetimeDays = 365`, DS §3.2 token validation |
 | Logout invalidates token | DS §3.2 (security stamp mismatch forces re‑auth) |
 | Unsuccessful login attempts not reset on logout | DS §3.3 lockout logic |
-| **FR‑C3** Dashboard shows name + balance | DS §2.3 Child entity, DS §7.1 timeline endpoint |
-| **FR‑C4** Transaction timeline sorted DESC | DS §2.4 Transaction index (DESC), DS §7.1 timeline endpoint, DS §12 keyset pagination |
+| **FR‑C3** Dashboard shows name + balance | DS §7.1 (`GET /api/v1/household/children/me`), DS §2.3 Child entity, DS §9.5 currency formatting |
+| **FR‑C4** Transaction timeline sorted DESC | DS §2.4 Transaction index (DESC), DS §7.1 (`GET /api/v1/household/transactions`), DS §12 keyset pagination |
 
 ## 3. Shared Device Guard & Security (FR‑S)
 
@@ -73,8 +75,9 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | Append‑only | DS §2.3 AuditLog entity |
 | No edit/delete | DS §8 AuditService |
 | Log parent PIN changes | DS §8 |
-| Log child PIN resets | DS §8 |
-| Log child creation | DS §8 |
+| Log child PIN resets | DS §8 (`ChildPinReset`) |
+| Log child currency changes | DS §8 (`ChildCurrencyChanged`) |
+| Log child creation | DS §8 (`ChildCreated`) |
 | Log household settings changes | DS §8 |
 | Log household deletion | DS §8 |
 
@@ -92,10 +95,21 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | Trim & sanitize | DS §9.1 |
 | Max lengths | DS §9.2 + EF constraints |
 | Allowed characters | DS §9.2 regex + whitelist |
-| Decimal precision rules | DS §2.4 precision definitions |
-| Trailing zeros based on decimal_digits | DS §9.5 Trailing-Zero Display, DS §2.3 Household.DecimalDigits |
+| Decimal precision rules | DS §2.4 precision definitions, DS §9.4 |
+| Trailing zeros based on currency's decimal digits | DS §9.5 Trailing-Zero Display, DS §2.1.1 `CurrencyType.DecimalDigits` |
 
-## 8. Out‑of‑Scope Items (SRS §10)
+## 8. Data Model — Currency (SRS §4.3)
+
+| **SRS Requirement** | **SDS Implementation** |
+| ------------------- | ---------------------- |
+| Closed, system-defined currency set | DS §2.1.1 `CurrencyType` (sealed records + `Parse`/`TryParse`) |
+| Each currency carries symbol, country, titles, decimal digits | DS §2.1.1 record properties (`Symbol`, `Country`, `Title`, `NativeTitle`, `DecimalDigits`) |
+| Household default currency | DS §2.3 `Household.DefaultCurrencyKey`, DS §7.1 settings endpoint |
+| Per-child currency, inherited at creation | DS §2.3 `Child.CurrencyKey`, DS §7.1 child creation |
+| Transaction keeps currency snapshot | DS §2.3 `Transaction.CurrencyKey`, DS §4 atomic insert |
+| Balance fields Decimal(19,3), amount Decimal(13,3) | DS §2.4 EF precision definitions, DS §9.4 |
+
+## 9. Out‑of‑Scope Items (SRS §10)
 
 SDS correctly excludes:
 

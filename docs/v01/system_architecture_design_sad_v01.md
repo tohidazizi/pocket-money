@@ -1,12 +1,11 @@
 # Pocket-Money — System Architecture Design (SAD)
 
-> 12 August 2026
-> Version 1.0
-
-* **Project:** Pocket-Money, Virtual Family Allowance & Ledger Web Application
-* **Target Release:** V1 MVP
-* **Document Status:** Draft for Review
-* **Companion Docs:** SRS v1.0 (requirements) · SDS v1.0 (source of truth for module-level design)
+> * **Project Name:** Pocket-Money, Virtual Family Allowance & Ledger Web Application
+> * **Version:** 1.0
+> * **Target Release:** V1 Minimal Viable Product (MVP)
+> * **Date:** 13 August 2026
+> * **Document Status:** Approved / Final Baseline
+> * **Companion Docs:** SRS v1.0 (requirements) · SDS v1.0 (source of truth for module-level design)
 
 ## 1. Purpose & Scope
 
@@ -100,7 +99,7 @@ Dependency direction: Presentation → Core ← Infrastructure; Global reference
  global (not tenant-scoped):  login_attempts, ip_bans
 ```
 
-* **Ledger integrity:** `transactions` is append-only; corrections are new adjustment transactions. Each row stores a `remaining_after` snapshot, and `children.current_balance` is a cached running total updated atomically with the insert (see §6).
+* **Ledger integrity:** `transactions` is append-only; corrections are new adjustment transactions. Each row stores a `remaining_after` snapshot and a **currency snapshot** (`CurrencyKey`), so history keeps its own denomination even after a child's currency change; `children.current_balance` is a cached running total updated atomically with the insert (see §6).
 * **Timeline access:** keyset (cursor) pagination — pages of 25, constant cost at any depth, `nextCursor: null` = end of history (SDS §12).
 
 ## 5. Authentication & Session Architecture
@@ -118,7 +117,7 @@ Dependency direction: Presentation → Core ← Infrastructure; Global reference
 
 ```text
  Parent SPA            API — LedgerService           PostgreSQL
-     │ POST /api/v1/transactions │                        │
+     │ POST /api/v1/household/transactions │                        │
      ├──────────────────────────►│ BEGIN TX               │
      │                           │ SELECT child … FOR UPDATE (row lock)
      │                           ├───────────────────────►│
@@ -174,6 +173,7 @@ MVP runs a single API instance. Scaling note: horizontal scale-out later require
 | AD-8 | SignalR push after commit | Child devices see balance changes instantly without polling |
 | AD-9 | Keyset (cursor) pagination for timelines | Constant page cost, concurrent-insert safety, clean end-of-history signal (SDS §12) |
 | AD-10 | No PostgreSQL RLS in V1 | Household isolation enforced by middleware + EF global query filters; RLS may be added later as an extra layer |
+| AD-11 | Per-child currency (closed `CurrencyType` set) with per-row ledger snapshots; currency change carries balance numerically, no conversion | Keeps the ledger append-only and self-describing; history renders in its original denomination (SDS §2.1.1, §2.3, §4) |
 
 ## 10. Open Items
 

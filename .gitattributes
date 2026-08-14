@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repo and in the working tree.
+# Repo lives on /mnt/c and is edited from both Windows (VS Code) and WSL;
+# forcing LF eliminates CRLF/LF churn between the two sides.
+* text=auto eol=lf

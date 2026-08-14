@@ -1,8 +1,5 @@
 # Pocket-Money- Software Requirements Specification (SRS)
 
-> 10 August 2026
-> Version 1.0
-
 Pocket-Money app is a virtual family allowance & ledger web application.
 
 ## 1. Document Overview & Metadata
@@ -10,7 +7,7 @@ Pocket-Money app is a virtual family allowance & ledger web application.
 * **Project Name:** Pocket-Money, Virtual Family Allowance & Ledger Web Application
 * **Version:** 1.0
 * **Target Release:** V1 Minimal Viable Product (MVP)
-* **Date:** 9 August 2026
+* **Date:** 13 August 2026
 * **Document Status:** Approved / Final Baseline
 
 ## 2. Project Description & Scope
@@ -31,7 +28,7 @@ Pocket-Money is a multi-tenant web platform designed for parents to manage virtu
 
 * **Tenant Boundary:** `Household` object acts as the primary logical multi-tenant boundary.
 * **Data Scoping:** All database records (`parents`, `children`, `transactions`) MUST contain a `household_id` foreign key.
-* **Security Rules:** Row-level security (RLS) or database security rules must enforce that users cannot read or write data outside their assigned `household_id`.
+* **Security Rules:** Tenant isolation enforcement MUST guarantee that users cannot read or write data outside their assigned `household_id`. The concrete enforcement mechanism is defined in the SDS.
 
 ### 3.2 Authentication & Session Architecture
 
@@ -67,8 +64,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 | :--- | :--- | :--- | :--- |
 | `id` | UUID / String | Primary Key | Unique household identifier |
 | `display_name` | String | Optional | Household/Family name |
-| `currency_symbol` | String (3) | Required | Display currency symbol (e.g., `$`, `€`, `£`, `¥`) |
-| `decimal_digits` | byte | 0, 1, 2, or 3 | Number of decimal places in transaction amount |
+| `default_currency_key` | String | Required | Key of the default currency (§4.3); inherited by new child profiles |
 | `created_at` | Timestamp | Auto / UTC | Household creation date and time |
 
 #### 2. `parents` Table / Collection
@@ -91,7 +87,8 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 | `household_id` | UUID / String | Foreign Key (`households.id`) | Multi-tenant boundary verification |
 | `display_name` | String | Required | Child's display name or nickname |
 | `pin_hash` | String | Required | Encrypted 4-digit PIN set and managed by parent |
-| `current_balance` | Decimal (10,3) | Default `0.000` | Cached running total balance |
+| `currency_key` | String | Required | Key of the child's currency (§4.3); inherits household default at creation; changeable by parents (FR-P7) |
+| `current_balance` | Decimal (19,3) | Default `0.000` | Cached running total balance, denominated in the child's currency |
 | `created_at` | Timestamp | Auto / UTC | Child account creation timestamp |
 | `creator` | UUID / String | Foreign Key (`parents.id`) | Creator of this child profile |
 | `unsuccessful_login_attempts` | byte | default 0 | increment with each failed login; reset to 0 with successful login |
@@ -105,13 +102,14 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 | `household_id` | UUID / String | Foreign Key (`households.id`) | Strict multi-tenant data filter |
 | `child_id` | UUID / String | Foreign Key (`children.id`) | Associated child profile |
 | `type` | Enum | `CREDIT` \| `DEBIT` | Transaction direction (`CREDIT` = deposit, `DEBIT` = withdrawal) |
-| `amount` | Decimal (10,3) | Greater than 0.000 | Monetary amount of the transaction |
+| `currency_key` | String | Required | Snapshot of the child's currency at creation time (§4.3) — history keeps its denomination |
+| `amount` | Decimal (13,3) | Greater than 0.000 | Monetary amount of the transaction |
 | `reason` | String (255) | Required | Descriptive memo/reason (e.g., "Mowed Lawn", "Bought Game") |
-| `remaining_after` | Decimal (10,3) | Required | Snapshot of child's balance immediately following this transaction |
+| `remaining_after` | Decimal (19,3) | Required | Snapshot of child's balance immediately following this transaction |
 | `created_at` | Timestamp | Auto / UTC | Timestamp when the transaction was logged |
 | `creator` | UUID / String | Foreign Key (`parents.id`) | creator of this transaction |
 
-#### 4. `loginattempts` Table / Collection (Append-Only Ledger)
+#### 5. `loginattempts` Table / Collection (Append-Only Ledger)
 
 | Field | Data Type | Key / Constraint | Description |
 | :--- | :--- | :--- | :--- |
@@ -123,13 +121,20 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 
 \* loginattempts is global, not per household.
 
+### 4.3 Currency Model
+
+* Currency is a **closed, system-defined set** (`CurrencyType`) — not free text. Each currency carries its display symbol, country, display titles, and its own number of decimal digits (e.g., Points and Iranian Rial = 0, USD = 2, Omani Rials = 3).
+* A household defines a **default currency**; each child profile has its own currency, inherited from the household default at creation (FR-P3).
+* Parents may change a child's currency at any time (FR-P7).
+* The concrete currency list and its technical representation are defined in the SDS.
+
 ## 5. Functional Requirements (FR)
 
 ### 5.1 Parent Management & Onboarding
 
 * **FR-P1 (Account Setup):**
   * System shall allow a parent to register/login via Firebase Auth (Email/Password or Google SSO, etc.).
-  * System shall prompt initial parent setup to set Household Currency Symbol and establish a 4-digit Parent Lock PIN.
+  * System shall prompt initial parent setup to set the Household **default currency** (§4.3) (default value = Point) and establish a 4-digit Parent Lock PIN.
   * Only the first parent (household creator) can delete the household.
     * Household deletion shall physically delete all household data (except audit logs) and is irreversible. User must be alarmed and approve the process.
 * **FR-P2 (Parent Management)** (features for version 1):
@@ -147,8 +152,13 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
     * PocketMoney Account ID must be unique, if it is not, try again to generate a new random unique Account ID.
   * Child Username is his/her PocketMoney Account ID.
   * System shall set an initial random 4-digit numeric PIN for the child profile.
+  * New child profiles inherit the household's default currency (§4.3).
 * **FR-P4 (Child PIN Reset):**
   * Parent shall be able to view child usernames and update any child’s 4-digit PIN from the Parent Dashboard at any time.
+* **FR-P7 (Child Currency Change):**
+  * Parent shall be able to change a child's currency at any time from the Parent Dashboard.
+  * On change, the child's current balance carries over **numerically** into the new currency (no conversion rate); the parent makes this decision knowingly.
+  * Past transactions are immutable: each keeps the currency it was recorded in (§4.3, FR-P6), and the timeline renders each record in its own currency.
 * **FR-P5 (Transaction Logging):**
   * Parent shall select a child, specify transaction type (`CREDIT` or `DEBIT`), enter a positive monetary `amount`, and enter a non-empty `reason`.
   * System shall perform an atomic database operation:
@@ -180,7 +190,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
     * Does logout require PIN next time? Yes.
     * Does logout reset unsuccessful login attempts? No.
 * **FR-C3 (Dashboard & Balance Summary):**
-  * Child home screen shall display the child's `display_name` and `current_balance` formatted with the household's selected currency symbol and number of decimal places in the balance is decimal_digits.
+  * Child home screen shall display the child's `display_name` and `current_balance` formatted with the child's currency symbol; the number of decimal places equals that currency's decimal digits (§4.3).
 * **FR-C4 (Transaction Timeline):**
   * Child home screen shall render a chronological list of all transaction records associated with the child, sorted by `created_at` descending (newest first).
   * Each record card in the timeline must explicitly present:
@@ -199,7 +209,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 
 ## 6. Non-Functional Requirements (NFR)
 
-* **NFR-1 (Data Integrity):** Transaction insertion and child balance updates MUST occur within an atomic database transaction or Firestore batch write to guarantee `remaining_after` accuracy.
+* **NFR-1 (Data Integrity):** Transaction insertion and child balance updates MUST occur within an atomic database transaction to guarantee `remaining_after` accuracy.
 * **NFR-2 (Usability & Responsiveness):** Both Parent and Child UI must be touch-friendly, high-contrast, and responsive across mobile, tablet, and desktop viewports.
 * **NFR-3 (Performance):** Transaction queries for the child timeline must utilize composite indexes on `(child_id, created_at DESC)` to maintain response times < 200ms for up to 10,000 transaction rows per child.
 * **NFR-4 (Security):** Child PINs and Parent Lock PINs must never be stored in plain text. Passwords/PINs must be hashed securely on server/backend functions before persistence.
@@ -220,6 +230,7 @@ The following events must be logged for future auditing:
 * Audit logs cannot be edited or deleted
 * Parent PIN changes
 * Child PIN resets
+* Child currency changes
 * Child profile creation
 * Household settings changes
 * Audit log schema will be defined in SDS document.
@@ -236,7 +247,7 @@ The following events must be logged for future auditing:
 * String values must be trimmed and sanitized.
 * Allowed characters for each field must be checked.
 * Decimal precision enforcement rules.
-* Trailing zeros are displayed based on `decimal_digits` household settings.
+* Trailing zeros are displayed based on the child's currency decimal digits (§4.3).
 
 ## 10. Version 1 Out of Scope (Future Roadmap)
 

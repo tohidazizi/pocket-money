@@ -88,7 +88,7 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 │   │   │   ├── Hubs/
 │   │   │   └── Middlewares/
 │   │   │
-|   │   └── PocketMoney.Client/            # Blazor WASM UI Components, State, Services
+│   │   └── PocketMoney.Client/            # Blazor WASM UI Components, State, Services
 │   │       ├── Pages/
 │   │       ├── Shared/
 │   │       └── Services/
@@ -216,7 +216,7 @@ public abstract record CurrencyType
 
     public string Symbol { get; }
     public string Country { get; }
-    public string Key { get; }
+    public string Title { get; }
     public string NativeTitle { get; }
     public byte DecimalDigits { get; }
 
@@ -224,28 +224,29 @@ public abstract record CurrencyType
     public string Key => GetType().Name;
 
     // Prevents derivation outside this scope
-    private CurrencyType(string symbol, string country, string Key, string KeyNative = null, byte decimalDigits = 0,)
+    private CurrencyType(string symbol, string country, string title, string nativeTitle = null, byte decimalDigits = 0)
     {
-        // TODO: throw exception if symbol, country, or key are null or empty
-        // TODO: throw exception if key length > KeyMaxLength
-        // TODO: throw exception if decimalDigits <0 or > 3
+        // TODO: throw exception if symbol, country, or title are null or empty
+        // TODO: throw exception if Key length > KeyMaxLength
+        // TODO: throw exception if decimalDigits < 0 or > 3
 
         Symbol = symbol;
         Country = country;
-        Key = key;
-        NativeTitle = string.IsNullOrWhiteSpace(nativeTitle) ?? key;
+        Title = title;
+        NativeTitle = string.IsNullOrWhiteSpace(nativeTitle) ? title : nativeTitle;
         DecimalDigits = decimalDigits;
     }
 
     public record Point() : CurrencyType("🪙", "World", PointKey);
     public record IRR() : CurrencyType("ريال", "IR", "Iranian Rial", "ریال");
     public record IRRT() : CurrencyType("ت", "IR", "Iranian Toman", "تومان");
-    public record IRRHT() : CurrencyType("ه‍.ت", "IR", "Iranian Thousand of Tomans", 3, "هزار تومان");
-    public record USD() : CurrencyType("$", "US", "US Dollar", 2);
-    public record CAD() : CurrencyType("$", "CA", "Canadian Dollar", 2);
-    public record EuroFr() : CurrencyType("€", "FR", "Euro", 2);
-    public record EuroDe() : CurrencyType("€", "DE", "Euro", 2);
-    public record Pound() : CurrencyType("£", "GB", "GBP", 2);
+    public record IRRHT() : CurrencyType("ه‍.ت", "IR", "Iranian Thousand of Tomans", "هزار تومان", 3);
+    public record USD() : CurrencyType("$", "US", "US Dollar", decimalDigits: 2);
+    public record CAD() : CurrencyType("$", "CA", "Canadian Dollar", decimalDigits: 2);
+    public record EuroFr() : CurrencyType("€", "FR", "Euro", decimalDigits: 2);
+    public record EuroDe() : CurrencyType("€", "DE", "Euro", decimalDigits: 2);
+    public record Pound() : CurrencyType("£", "GB", "GBP", decimalDigits: 2);
+    public record OMR() : CurrencyType("ر.ع.", "OM", "Omani Rial", "ريال عماني", 3);
     // TODO: will add all currencies/countries during the implementation
 
     private static readonly IReadOnlyDictionary<string, CurrencyType> _all =
@@ -260,6 +261,7 @@ public abstract record CurrencyType
             [nameof(EuroFr)] = new EuroFr(),
             [nameof(EuroDe)] = new EuroDe(),
             [nameof(Pound)] = new Pound(),
+            [nameof(OMR)] = new OMR(),
         };
 
     public static IReadOnlyCollection<CurrencyType> Supported => _all.Values;
@@ -267,11 +269,11 @@ public abstract record CurrencyType
     // null when the key is unknown — callers reject with 400
     public static CurrencyType? Parse(string key) => _all.TryGetValue(key, out var c) ? c : null;
 
-    public static bool TryParse(string key, out CurrencyType currencyType?) 
+    public static bool TryParse(string key, out CurrencyType? currencyType)
     {
-        currencyType = Parse(key)
+        currencyType = Parse(key);
         return currencyType is not null;
-    } 
+    }
 }
 ```
 
@@ -279,8 +281,8 @@ Rules:
 
 * **Persistence:** entities store the currency as its string `Key` (the record type name, e.g. `"IRR"`); the record type itself never touches EF. Resolution is `CurrencyType.Parse(key)`; unknown keys are rejected with `400` (§9.2).
 * **Household default + per-child scope:** the household holds a `DefaultCurrencyKey` that new child profiles inherit at creation. Each child then owns its own currency — e.g. a younger child earns Points while an older child gets real money.
-* **Changeable by parents:** a child's `CurrencyKey` can be changed at any time via `PUT /children/{id}/currency` (§7.1). The current balance **carries over numerically** into the new denomination (50 Points → 50 USD); the parent makes that decision knowingly. The append-only ledger is unaffected: every row keeps its original currency via the `Transaction.CurrencyKey` snapshot (§2.3), so history renders in its original denomination. Changes are audit-logged (`AuditEventType.ChildCurrencyChanged`, §8).
-* **Decimal precision** is inherent to the currency (`DecimalDigits`) Point/IRR/IRRT = 0, USD/CAD/EUR/GBP = 2, OMR = 3.
+* **Changeable by parents:** a child's `CurrencyKey` can be changed at any time via `PUT /api/v1/household/children/{id}/currency` (§7.1). The current balance **carries over numerically** into the new denomination (50 Points → 50 USD); the parent makes that decision knowingly. The append-only ledger is unaffected: every row keeps its original currency via the `Transaction.CurrencyKey` snapshot (§2.3), so history renders in its original denomination. Changes are audit-logged (`AuditEventType.ChildCurrencyChanged`, §8).
+* **Decimal precision** is inherent to the currency (`DecimalDigits`): Point/IRR/IRRT = 0, USD/CAD/EuroFr/EuroDe/Pound = 2, IRRHT/OMR = 3.
 
 ### 2.2 Shared Enums (`PocketMoney.Global`)
 
@@ -362,7 +364,7 @@ public sealed class Child
 
     // Currency of this child's balance — key into CurrencyType (§2.1.1).
     // Inherited from Household.DefaultCurrencyKey at creation; parents may
-    // change it at any time (PUT /children/{id}/currency).
+    // change it at any time (PUT /api/v1/household/children/{id}/currency).
     public string CurrencyKey { get; set; } = CurrencyType.PointKey;
 
     public decimal CurrentBalance { get; set; } = 0.000m;
@@ -507,10 +509,9 @@ public sealed class ChildConfiguration : IEntityTypeConfiguration<Child>
 
         builder.HasIndex(c => c.AccountId).IsUnique();
 
-        // Note: SRS specifies current_balance as Decimal(13,3). (19,3) is a
-        // deliberate, documented deviation: balance is a running sum of (13,3)
-        // amounts and can legitimately exceed a (13,3) range; (19,3) is a strict
-        // superset and keeps remaining_after and current_balance at equal width.
+        // Balance is a running sum of Decimal(13,3) amounts and can legitimately
+        // exceed narrower ranges; (19,3) is a strict superset and keeps
+        // remaining_after and current_balance at equal width (SRS §4.2).
         builder.Property(c => c.CurrentBalance)
             .HasPrecision(19, 3)
             .HasDefaultValue(0.000m);
@@ -539,11 +540,11 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.HasKey(t => t.Id);
 
         builder.Property(t => t.Amount)
-            .HasPrecision(10, 3)
+            .HasPrecision(13, 3)
             .IsRequired();
 
         builder.Property(t => t.RemainingAfter)
-            .HasPrecision(13, 3)
+            .HasPrecision(19, 3)
             .IsRequired();
 
         builder.Property(t => t.Reason)
@@ -732,7 +733,7 @@ public async Task<TransactionResultDto> CreateTransactionAsync(CreateTransaction
 
 ## 5. Parent Invitation Flow (SendGrid + Firebase)
 
-1. **Invite Request:** Parent 1 submits Parent 2’s email via `POST /api/v1/households/invite`.
+1. **Invite Request:** Parent 1 submits Parent 2’s email via `POST /api/v1/household/invite`.
 2. **Token Generation:** Backend verifies Household parent count < `Constants.MaxParentsPerHousehold` **and no pending invitation exists** (unaccepted and unexpired); otherwise rejects with `409 Conflict`. Then creates a `HouseholdInvitation` record with an encrypted token, and dispatches an invitation email using SendGrid.
 3. **Acceptance:** Parent 2 clicks link (`[https://pocketmoney.app/accept-invite?token=](https://pocketmoney.app/accept-invite?token=)...`).
 4. **Auth Link:** Parent 2 logs in or registers via Firebase Auth on Blazor WASM.
@@ -784,7 +785,8 @@ public class InactivityTimerService : IDisposable
 | `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
 | `PUT` | `/api/v1/household/children/{id}/currency` | Parent JWT | Changes a child's currency (§2.1.1): balance carries over numerically, ledger rows keep their original currency snapshot; audit-logged as `ChildCurrencyChanged` |
 | `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Updates a parent PIN |
-| `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by ChildrenId, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason; Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
+| `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by `childId`, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason; Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
+| `GET` | `/api/v1/household/children/me` | Child JWT | Returns the calling child's own profile: `displayName`, `currentBalance`, and resolved currency info (§2.1.1) — the child dashboard source (FR-C3) |
 | `POST` | `/api/v1/household/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
 
 \* First parent very first time log-in triggers creating a household, so there is no explicit API to create household.
@@ -946,7 +948,7 @@ Transaction volume grows unbounded (NFR-3 budgets 10,000 rows per child). Both t
 ### 12.2 API Contract
 
 ```text
-GET /api/v1/transactions/child/{id}?cursor={opaque}&pageSize=25
+GET /api/v1/household/transactions?childId={id}&cursor={opaque}&pageSize=25
 
 200 → {
   "items": [ ... up to pageSize rows ... ],
@@ -954,6 +956,7 @@ GET /api/v1/transactions/child/{id}?cursor={opaque}&pageSize=25
 }
 ```
 
+* **Filters first, then paging:** all §7.1 filters (`childId`, type, date range, amount range, reason search) are applied **before** keyset paging; the cursor encodes the `(created_at, id)` of the last row *within the filtered set*, and must always be sent back with the same filter values.
 * **Cursor:** opaque, URL-safe encoding of the `(created_at, id)` keyset of the **last row returned**. Clients treat it as a black box — never parsed, constructed, or cached across households.
 * **First page:** omit `cursor`.
 * **`pageSize`:** default `Constants.Timeline.DefaultPageSize` (25); values above `MaxPageSize` (100) are clamped server-side, invalid values rejected with `400`.
@@ -996,7 +999,7 @@ All business rules live in the Application tier and are tested **without a datab
 * IP-ban ladder: 10 failures in 24h → 1 day, then 7 days, then 30 days
 * Transaction math: credit/debit balance updates, negative-balance rejection, `remaining_after` snapshot
 * Parent cap: invite rejected at 2 parents or with a pending invitation; acceptance re-check race (§5)
-* Currency: `CurrencyType.FromKey` resolution, per-child `DecimalDigits` enforcement, default-currency inheritance on child creation, currency-change carries balance numerically + snapshots ledger rows (§2.1.1)
+* Currency: `CurrencyType.Parse` / `TryParse` resolution, per-child `DecimalDigits` enforcement, default-currency inheritance on child creation, currency-change carries balance numerically + snapshots ledger rows (§2.1.1)
 * Input validation rules (§9): trim, max length, allowed-character whitelists, decimal-scale rejection
 
 This project carries the highest coverage target — a bug here corrupts the ledger.

@@ -13,7 +13,7 @@
 - [X] SRS ↔ SDS Traceability Matrix
 - [X] SAD ↔ SDS Traceability Matrix
 - [  ] Database Schema / Entity-Relationship Diagrams
-- [  ] API Specifications
+- [.] API Specifications
 - [.] UI Prototype
 
 ## 3. Implementation & Code
