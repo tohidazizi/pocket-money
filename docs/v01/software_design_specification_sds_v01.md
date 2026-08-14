@@ -1,6 +1,10 @@
 # Software Design Specification (SDS)
 
-Pocket-Money Web Application — Version 1.0
+> * **Project Name:** Pocket-Money, Virtual Family Allowance & Ledger Web Application
+> * **Version:** 1.0
+> * **Target Release:** V1 Minimal Viable Product (MVP)
+> * **Date:** 13 August 2026
+> * **Document Status:** Approved / Final Baseline
 
 ## 1. System Architecture & Project Structure
 
@@ -133,7 +137,7 @@ Testing (see §13 — versions pinned centrally via `Directory.Packages.props`):
 
 ## 2. Domain Models & EF Core Code-First Schema
 
-### 2.1 Shared Constants (`PocketMoney.Global`)
+### 2.1 Shared Constants & Currency Types (`PocketMoney.Global`)
 
 ```csharp
 namespace PocketMoney.Global;
@@ -198,6 +202,86 @@ public static class Constants
 }
 ```
 
+### 2.1.1 CurrencyType (`PocketMoney.Global`)
+
+Currency is a **closed, hardcoded set** — not free text. Each entry carries its symbol, country, display titles, and its own decimal precision.
+
+```csharp
+namespace PocketMoney.Global;
+
+public abstract record CurrencyType
+{
+    public const string PointKey = nameof(Point);
+    public const int KeyMaxLength = 16;
+
+    public string Symbol { get; }
+    public string Country { get; }
+    public string Key { get; }
+    public string NativeTitle { get; }
+    public byte DecimalDigits { get; }
+
+    // Persisted discriminator: the concrete record's type name (e.g. "IRR", "Point")
+    public string Key => GetType().Name;
+
+    // Prevents derivation outside this scope
+    private CurrencyType(string symbol, string country, string Key, string KeyNative = null, byte decimalDigits = 0,)
+    {
+        // TODO: throw exception if symbol, country, or key are null or empty
+        // TODO: throw exception if key length > KeyMaxLength
+        // TODO: throw exception if decimalDigits <0 or > 3
+
+        Symbol = symbol;
+        Country = country;
+        Key = key;
+        NativeTitle = string.IsNullOrWhiteSpace(nativeTitle) ?? key;
+        DecimalDigits = decimalDigits;
+    }
+
+    public record Point() : CurrencyType("🪙", "World", PointKey);
+    public record IRR() : CurrencyType("ريال", "IR", "Iranian Rial", "ریال");
+    public record IRRT() : CurrencyType("ت", "IR", "Iranian Toman", "تومان");
+    public record IRRHT() : CurrencyType("ه‍.ت", "IR", "Iranian Thousand of Tomans", 3, "هزار تومان");
+    public record USD() : CurrencyType("$", "US", "US Dollar", 2);
+    public record CAD() : CurrencyType("$", "CA", "Canadian Dollar", 2);
+    public record EuroFr() : CurrencyType("€", "FR", "Euro", 2);
+    public record EuroDe() : CurrencyType("€", "DE", "Euro", 2);
+    public record Pound() : CurrencyType("£", "GB", "GBP", 2);
+    // TODO: will add all currencies/countries during the implementation
+
+    private static readonly IReadOnlyDictionary<string, CurrencyType> _all =
+        new Dictionary<string, CurrencyType>
+        {
+            [nameof(Point)] = new Point(),
+            [nameof(IRR)] = new IRR(),
+            [nameof(IRRT)] = new IRRT(),
+            [nameof(IRRHT)] = new IRRHT(),
+            [nameof(USD)] = new USD(),
+            [nameof(CAD)] = new CAD(),
+            [nameof(EuroFr)] = new EuroFr(),
+            [nameof(EuroDe)] = new EuroDe(),
+            [nameof(Pound)] = new Pound(),
+        };
+
+    public static IReadOnlyCollection<CurrencyType> Supported => _all.Values;
+
+    // null when the key is unknown — callers reject with 400
+    public static CurrencyType? Parse(string key) => _all.TryGetValue(key, out var c) ? c : null;
+
+    public static bool TryParse(string key, out CurrencyType currencyType?) 
+    {
+        currencyType = Parse(key)
+        return currencyType is not null;
+    } 
+}
+```
+
+Rules:
+
+* **Persistence:** entities store the currency as its string `Key` (the record type name, e.g. `"IRR"`); the record type itself never touches EF. Resolution is `CurrencyType.Parse(key)`; unknown keys are rejected with `400` (§9.2).
+* **Household default + per-child scope:** the household holds a `DefaultCurrencyKey` that new child profiles inherit at creation. Each child then owns its own currency — e.g. a younger child earns Points while an older child gets real money.
+* **Changeable by parents:** a child's `CurrencyKey` can be changed at any time via `PUT /children/{id}/currency` (§7.1). The current balance **carries over numerically** into the new denomination (50 Points → 50 USD); the parent makes that decision knowingly. The append-only ledger is unaffected: every row keeps its original currency via the `Transaction.CurrencyKey` snapshot (§2.3), so history renders in its original denomination. Changes are audit-logged (`AuditEventType.ChildCurrencyChanged`, §8).
+* **Decimal precision** is inherent to the currency (`DecimalDigits`) Point/IRR/IRRT = 0, USD/CAD/EUR/GBP = 2, OMR = 3.
+
 ### 2.2 Shared Enums (`PocketMoney.Global`)
 
 ```csharp
@@ -221,6 +305,7 @@ public enum AuditEventType
     ChildCreated,
     ChildPinReset,
     ChildAccountUnlocked,
+    ChildCurrencyChanged,
     ParentPinChanged,
     HouseholdSettingsUpdated,
     HouseholdDeleted,
@@ -240,8 +325,10 @@ public sealed class Household
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string? DisplayName { get; set; }
-    public string CurrencySymbol { get; set; } = "$";
-    public byte DecimalDigits { get; set; } = 2; // Allowed: 0, 1, 2, 3
+
+    // Currency new child profiles inherit at creation (§2.1.1).
+    public string DefaultCurrencyKey { get; set; } = CurrencyType.PointKey;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation Properties
@@ -272,6 +359,12 @@ public sealed class Child
     public Guid HouseholdId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string PinHash { get; set; } = string.Empty;
+
+    // Currency of this child's balance — key into CurrencyType (§2.1.1).
+    // Inherited from Household.DefaultCurrencyKey at creation; parents may
+    // change it at any time (PUT /children/{id}/currency).
+    public string CurrencyKey { get; set; } = CurrencyType.PointKey;
+
     public decimal CurrentBalance { get; set; } = 0.000m;
     public string CreatorId { get; set; } = string.Empty;
     public byte UnsuccessfulLoginAttempts { get; set; } = 0;
@@ -294,6 +387,11 @@ public sealed class Transaction
     public Guid HouseholdId { get; set; }
     public Guid ChildId { get; set; }
     public TransactionType Type { get; set; }
+
+    // Snapshot of the child's CurrencyKey at creation time (§2.1.1) —
+    // keeps the append-only ledger self-describing per row.
+    public string CurrencyKey { get; set; } = string.Empty;
+
     public decimal Amount { get; set; }
     public string Reason { get; set; } = string.Empty;
     public decimal RemainingAfter { get; set; }
@@ -363,6 +461,21 @@ public sealed class AuditLog
 ```csharp
 namespace PocketMoney.Persistence.EntityConfigurations;
 
+public sealed class HouseholdConfiguration : IEntityTypeConfiguration<Household>
+{
+    public void Configure(EntityTypeBuilder<Household> builder)
+    {
+        builder.ToTable("households");
+        builder.HasKey(h => h.Id);
+
+        // Default currency for new children (§2.1.1) — same key constraint
+        // as Child.CurrencyKey
+        builder.Property(h => h.DefaultCurrencyKey)
+            .HasMaxLength(CurrencyType.KeyMaxLength)
+            .IsRequired();
+    }
+}
+
 public sealed class ParentConfiguration : IEntityTypeConfiguration<Parent>
 {
     public void Configure(EntityTypeBuilder<Parent> builder)
@@ -394,16 +507,21 @@ public sealed class ChildConfiguration : IEntityTypeConfiguration<Child>
 
         builder.HasIndex(c => c.AccountId).IsUnique();
 
-        // Note: SRS specifies current_balance as Decimal(10,3). (13,3) is a
-        // deliberate, documented deviation: balance is a running sum of (10,3)
-        // amounts and can legitimately exceed a (10,3) range; (13,3) is a strict
+        // Note: SRS specifies current_balance as Decimal(13,3). (19,3) is a
+        // deliberate, documented deviation: balance is a running sum of (13,3)
+        // amounts and can legitimately exceed a (13,3) range; (19,3) is a strict
         // superset and keeps remaining_after and current_balance at equal width.
         builder.Property(c => c.CurrentBalance)
-            .HasPrecision(13, 3)
+            .HasPrecision(19, 3)
             .HasDefaultValue(0.000m);
 
         builder.Property(c => c.DisplayName)
             .HasMaxLength(Constants.Child.DisplayNameMaxLength)
+            .IsRequired();
+
+        // Currency key into CurrencyType (§2.1.1)
+        builder.Property(c => c.CurrencyKey)
+            .HasMaxLength(CurrencyType.KeyMaxLength)
             .IsRequired();
 
         builder.HasOne(c => c.Creator)
@@ -586,6 +704,7 @@ public async Task<TransactionResultDto> CreateTransactionAsync(CreateTransaction
             HouseholdId = child.HouseholdId,
             ChildId = child.Id,
             Type = cmd.Type,
+            CurrencyKey = child.CurrencyKey, // snapshot — history keeps its denomination (§2.1.1)
             Amount = cmd.Amount,
             Reason = cmd.Reason,
             RemainingAfter = newBalance,
@@ -656,16 +775,20 @@ public class InactivityTimerService : IDisposable
 | Method | Endpoint | Authorization | Description |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/auth/child/login` | Public | Authenticates child via Base31 Account ID + PIN |
-| ~~`POST`~~ | ~~`/api/v1/households`~~ | ~~Firebase JWT~~ | Parent very first time log-in triggers creating a household for him/her |
-| `PUT` | `/api/v1/households/{id}/settings` | Parent JWT | Sets household settings: currency & decimal accuracy |
-| `DELETE` | `/api/v1/households` | Parent JWT | Physical deletion of household (Owner parent only) |
-| `POST` | `/api/v1/households/invite` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
-| `POST` | `/api/v1/households/accept-invite` | Firebase JWT | Links 2nd parent to household |
-| `POST` | `/api/v1/children` | Parent JWT | Creates child profile & generates Base31 Account ID |
-| `PUT` | `/api/v1/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
-| `PUT` | `/api/v1/parents/me/pin` | Parent JWT | Updates a parent PIN |
-| `POST` | `/api/v1/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
-| `GET` | `/api/v1/transactions/child/{id}` | Parent / Child | Keyset-paginated timeline, `created_at DESC` (§12). Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history |
+| `GET` | `/api/v1/household` | Parent JWT | Gets Household info, children in list with their current balance, for the parent landing page |
+| `PUT` | `/api/v1/household/settings` | Parent JWT | Sets household settings: display name & default currency (§2.1.1) |
+| `DELETE` | `/api/v1/household` | Parent JWT | Physical deletion of household (Owner parent only) |
+| `POST` | `/api/v1/household/invite` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
+| `POST` | `/api/v1/household/accept-invite` | Firebase JWT | Links 2nd parent to household |
+| `POST` | `/api/v1/household/children` | Parent JWT | Creates child profile & generates Base31 Account ID; child inherits `Household.DefaultCurrencyKey` |
+| `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
+| `PUT` | `/api/v1/household/children/{id}/currency` | Parent JWT | Changes a child's currency (§2.1.1): balance carries over numerically, ledger rows keep their original currency snapshot; audit-logged as `ChildCurrencyChanged` |
+| `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Updates a parent PIN |
+| `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by ChildrenId, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason; Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
+| `POST` | `/api/v1/household/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
+
+\* First parent very first time log-in triggers creating a household, so there is no explicit API to create household.
+\*\* A child can only gets his/her transactions; Parent can see any transaction in the household.
 
 ### 7.2 SignalR Hub (`/hubs/ledger`)
 
@@ -728,7 +851,7 @@ Validation runs in three layers: **UI**, **API boundary** (DTO validation before
 | Child `AccountId` | 5 (fixed) | `^[0-9A-HJKLMNPRTVWXYZ]{5}$` — uppercase only; lowercase input is normalized to uppercase before lookup | Display |
 | Child / Parent `DisplayName` | 100 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
 | Household `DisplayName` | 60 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
-| `CurrencySymbol` | 3 | Any 1–3 printable characters | Display |
+| `CurrencyKey` (§2.1.1) | ≤ `CurrencyType.KeyMaxLength` | Must resolve via `CurrencyType.Parse(key)`; unknown keys rejected with `400` | Input/Display |
 | Transaction `Reason` | 255 | Free-form Unicode; control characters (U+0000–U+001F, U+007F) stripped; emoji restricted to `Constants.Transaction.ReasonEmojiWhitelist` — non-whitelisted emoji stripped at the API boundary | Input/Display |
 | PINs (child & parent) | 4 | Exactly 4 digits, `^\d{4}$` | Input |
 | Invitation email | 320 | RFC-5322 shape; verified again by Firebase at acceptance | Input/Display |
@@ -741,14 +864,15 @@ Validation runs in three layers: **UI**, **API boundary** (DTO validation before
 
 ### 9.4 Decimal Precision Rules
 
-* Transaction `amount` must be **strictly greater than 0** and ≤ 9,999,999.999 (fits `Decimal(10,3)`).
-* The fractional scale of `amount` must not exceed the household's `decimal_digits`. Values violating this are **rejected with `400` — never silently rounded**.
+* Transaction `amount` must be **strictly greater than 0** and ≤ 9,999,999,999.999 (fits `Decimal(13,3)`).
+* The fractional scale of `amount` must not exceed the **child's currency** `DecimalDigits` (§2.1.1). Values violating this are **rejected with `400` — never silently rounded**.
 * `remaining_after` is computed server-side from `current_balance ± amount`; the client's preview is display-only.
 
 ### 9.5 Trailing-Zero Display (Frontend)
 
-* Balances and amounts are rendered with **exactly** the household's `decimal_digits` decimal places (e.g. `$5.00` when `decimal_digits = 2`, `$5` when `0`).
-* The API returns raw decimal values plus the household settings; formatting is a client responsibility per SRS §9.
+* Balances and amounts are rendered with **exactly** the currency's `DecimalDigits` decimal places (e.g. `$5.00` for USD, `🪙5` for Point) and prefixed with the currency `Symbol`.
+* Timeline rows are rendered in **their own** snapshotted currency (§2.1.1) — after a currency change, history shows old rows in the old denomination and the current balance in the new one.
+* The API returns raw decimal values plus the resolved currency info; formatting is a client responsibility per SRS §9.
 
 ## 10. Multi-Tenant Enforcement Model (SRS §3.1)
 
@@ -872,6 +996,7 @@ All business rules live in the Application tier and are tested **without a datab
 * IP-ban ladder: 10 failures in 24h → 1 day, then 7 days, then 30 days
 * Transaction math: credit/debit balance updates, negative-balance rejection, `remaining_after` snapshot
 * Parent cap: invite rejected at 2 parents or with a pending invitation; acceptance re-check race (§5)
+* Currency: `CurrencyType.FromKey` resolution, per-child `DecimalDigits` enforcement, default-currency inheritance on child creation, currency-change carries balance numerically + snapshots ledger rows (§2.1.1)
 * Input validation rules (§9): trim, max length, allowed-character whitelists, decimal-scale rejection
 
 This project carries the highest coverage target — a bug here corrupts the ledger.
