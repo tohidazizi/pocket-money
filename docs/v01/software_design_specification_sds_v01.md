@@ -13,7 +13,7 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 ### 1.1 Technology Stack Summary
 
 * **Frontend:** Blazor WebAssembly (.NET 11)
-* **Backend:** ASP.NET 11 Web API & SignalR Hubs
+* **Backend:** ASP.NET 11 Minimal APIs & SignalR Hubs
 * **Database:** PostgreSQL 16+ via Entity Framework Core 11 (Npgsql)
 * **Authentication:** Firebase Authentication (Parents) + Custom 365-day JWT Issuer (Children)
 * **Email Service:** SendGrid (for second parent invitation delivery)
@@ -83,8 +83,8 @@ The Pocket-Money platform is designed as a decoupled, multi-tenant web applicati
 │   │   ├── PocketMoney.Shared/            # Shared "only" between API and Client
 │   │   │   └── Utilities/
 │   │   │
-│   │   ├── PocketMoney.Api/               # Controllers, SignalR Hubs, Middlewares, Auth Handlers
-│   │   │   ├── Controllers/
+│   │   │   ├── PocketMoney.Api/               # Minimal API Endpoints, SignalR Hubs, Middlewares, Auth Handlers
+│   │   │   │   ├── Endpoints/
 │   │   │   ├── Hubs/
 │   │   │   └── Middlewares/
 │   │   │
@@ -124,6 +124,7 @@ Rules:
 * Serilog.AspNetCore
 * refit
 * Microsoft.Extensions.Http.Resilience
+* MudBlazor
 
 Testing (see §13 — versions pinned centrally via `Directory.Packages.props`):
 
@@ -312,7 +313,8 @@ public enum AuditEventType
     HouseholdSettingsUpdated,
     HouseholdDeleted,
     ParentInvited,
-    ParentJoined
+    ParentJoined,
+    ParentInvitationCancelled
 }
 
 ```
@@ -347,6 +349,9 @@ public sealed class Parent
     public Guid HouseholdId { get; set; }
     public string? DisplayName { get; set; }
     public string Email { get; set; } = string.Empty;
+
+    // Empty string = no PIN set yet (first-time parent, §7.1.2).
+    // hasPin := ParentPinHash is non-empty.
     public string ParentPinHash { get; set; } = string.Empty;
 
     // Earliest Parent.CreatedAt in the household identifies the household
@@ -494,6 +499,8 @@ public sealed class ParentConfiguration : IEntityTypeConfiguration<Parent>
         builder.HasIndex(p => new { p.Id, p.HouseholdId }).IsUnique();
 
         builder.Property(p => p.Email).IsRequired();
+
+        // IsRequired but may be the empty-string sentinel ("no PIN yet", §2.3)
         builder.Property(p => p.ParentPinHash).IsRequired();
     }
 }
@@ -564,7 +571,7 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 
 ```
 
-**One parent — one household:** a Firebase UID can belong to at most one household, ever (enforced by `ParentConfiguration` above and re-checked at invitation acceptance, §5). Consequently, `accept-invite` must reject any Firebase user who already belongs to a household — including one auto-created at first sign-in (§7.1).
+**One parent — one household:** a Firebase UID can belong to at most one household, ever (enforced by `ParentConfiguration` above and re-checked at invitation acceptance, §5). Consequently, the accept endpoint must reject any Firebase user who already belongs to a household — including one auto-created at first sign-in (§7.1).
 
 **Household owner (FR-P1):** `DELETE /api/v1/household` is owner-only. The owner is the parent with the earliest `Parent.CreatedAt` in the household — the first parent, who auto-created the household at first sign-in (§7.1.2). The second parent always joins later via invitation (§5), so the ordering is unambiguous. Non-owner deletion attempts are rejected with `403` (§7.1.1).
 
@@ -738,12 +745,13 @@ public async Task<TransactionResultDto> CreateTransactionAsync(CreateTransaction
 
 ## 5. Parent Invitation Flow (SendGrid + Firebase)
 
-1. **Invite Request:** Parent 1 submits Parent 2’s email via `POST /api/v1/household/invite`.
+1. **Invite Request:** Parent 1 submits Parent 2’s email via `POST /api/v1/household/invitations`.
 2. **Token Generation:** Backend verifies Household parent count < `Constants.MaxParentsPerHousehold` **and no pending invitation exists** (unaccepted and unexpired); otherwise rejects with `409 Conflict`. Then creates a `HouseholdInvitation` record with an encrypted token, and dispatches an invitation email using SendGrid.
-3. **Acceptance:** Parent 2 clicks link (`[https://pocketmoney.app/accept-invite?token=](https://pocketmoney.app/accept-invite?token=)...`).
+3. **Acceptance:** Parent 2 clicks link (`[https://pocketmoney.app/invitations/accept?token=](https://pocketmoney.app/invitations/accept?token=)...`).
 4. **Auth Link:** Parent 2 logs in or registers via Firebase Auth on Blazor WASM.
 5. **Linking:** Backend validates the invitation token **and re-checks the cap inside the same database transaction**: current parent count is still < `MaxParentsPerHousehold`, and the accepting Firebase UID does not already belong to any household (§2.4). Re-checking at acceptance closes the race where two outstanding invitations could otherwise produce 3 parents. On success: links Parent 2's Firebase UID to the existing `HouseholdId` and logs the event in `AuditLog`; on failure: `409 Conflict`.
 6. **UI rule:** the "Invite another parent" action is hidden/disabled whenever the household already has 2 parents **or a pending invitation exists**. The button state is a convenience — the server-side `409` checks in steps 2 and 5 are the authority.
+7. **Cancellation:** only the parent who sent an invitation may cancel it — `DELETE /api/v1/household/invitations/{id}`. The row is physically deleted (the append-only `AuditLog` entry `ParentInvitationCancelled` keeps the record), which frees the household to send a new invitation.
 
 ## 6. Frontend State & Shared Device Guard (Blazor WASM)
 
@@ -776,20 +784,28 @@ public class InactivityTimerService : IDisposable
 
 ## 7. API Endpoints & SignalR Specifications
 
-### 7.1 REST Controllers
+### 7.0 API Implementation Conventions
+
+* **Minimal APIs:** `PocketMoney.Api` is built with ASP.NET Core Minimal APIs (no controllers); routes are grouped per domain and mapped under `Endpoints/` (§1.3).
+* **Error handling — ProblemDetails (RFC 9457):** every non-2xx response is an ASP.NET Core `ProblemDetails` body (`type`, `title`, `status`, `detail`). The domain error code rides in a `code` extension; locked responses extend it with `lockedUntil` (e.g. `LockedErrorDetails : ProblemDetails`).
+* **OpenAPI:** the generated document is served by Scalar.AspNetCore (§1.5).
+* Common request/response conventions (base path, auth schemes, timestamps, money, household scoping) are specified in API Specification §1.
+
+### 7.1 REST Endpoints
 
 | Method | Endpoint | Authorization | Description |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/auth/child/login` | Public | Authenticates child via Base31 Account ID + PIN |
-| `GET` | `/api/v1/household` | Parent JWT | Gets Household info, children in list with their current balance, for the parent landing page |
+| `GET` | `/api/v1/household` | Parent JWT | Parent landing-page payload: household info, `parents` array (`id`, `displayName`, `isOwner`, `hasPin` per parent — drives owner detection and onboarding), children list with current balances |
 | `PUT` | `/api/v1/household/settings` | Parent JWT | Sets household settings: display name & default currency (§2.1.1) |
 | `DELETE` | `/api/v1/household` | Parent JWT | Physical deletion of the household — **owner parent only** (§2.3) |
-| `POST` | `/api/v1/household/invite` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
-| `POST` | `/api/v1/household/accept-invite` | Firebase JWT | Links 2nd parent to household |
+| `POST` | `/api/v1/household/invitations` | Parent JWT | Generates SendGrid email invitation for 2nd parent |
+| `POST` | `/api/v1/household/invitations/accept` | Firebase JWT | Links 2nd parent to household |
+| `DELETE` | `/api/v1/household/invitations/{id}` | Parent JWT | Cancels a pending invitation — **sender only** (§5 step 7); row deleted, `ParentInvitationCancelled` audit-logged |
 | `POST` | `/api/v1/household/children` | Parent JWT | Creates child profile & generates Base31 Account ID; child inherits `Household.DefaultCurrencyKey`. The generated initial PIN is returned **only once** — in this creation response — and is never retrievable afterwards |
 | `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
 | `PUT` | `/api/v1/household/children/{id}/currency` | Parent JWT | Changes a child's currency (§2.1.1): balance carries over numerically, ledger rows keep their original currency snapshot; audit-logged as `ChildCurrencyChanged` |
-| `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Updates a parent PIN |
+| `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Sets or updates the caller's Parent Lock PIN; `currentPin` required only when a PIN already exists (`hasPin = true`, §2.3) |
 | `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by `childId`, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason (case-insensitive substring); Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
 | `GET` | `/api/v1/household/children/me` | Child JWT | Returns the calling child's own profile: `displayName`, `currentBalance`, and resolved currency info (§2.1.1) — the child dashboard source (FR-C3) |
 | `POST` | `/api/v1/household/transactions` | Parent JWT | Executes atomic transaction (`CREDIT`/`DEBIT`) |
@@ -799,7 +815,7 @@ public class InactivityTimerService : IDisposable
 
 #### 7.1.1 HTTP Status Mapping
 
-The endpoint table defines operations; this section fixes the HTTP status each outcome returns. Error bodies follow the common shape specified in the API Specification §1.4 (`{ "error": { "code", "message" } }`).
+The endpoint table defines operations; this section fixes the HTTP status each outcome returns. Error bodies are RFC 9457 ProblemDetails (§7.0): the domain error code rides in the `code` extension, `detail` carries the human-readable message.
 
 | Status | Codes used | Defined in |
 | --- | --- | --- |
@@ -825,10 +841,12 @@ Households have no creation endpoint (footnote \* above); they are auto-created 
 2. Onboarding step 1 — `PUT /api/v1/household/settings`: household display name + default currency (FR-P1).
 3. Onboarding step 2 — `PUT /api/v1/household/parents/me/pin`: establish the 4-digit Parent Lock PIN (FR-P1).
 
+First-time PIN set omits `currentPin` (no hash to verify yet, §2.3); afterwards the endpoint requires it.
+
 **Second parent (invited, §5):**
 
 1. Accepts the invitation → Firebase UID linked to the existing household (`ParentJoined` audit event).
-2. Onboarding — `PUT /api/v1/household/parents/me/pin` only; household settings already exist.
+2. Onboarding — `PUT /api/v1/household/parents/me/pin` only (first-time set, no `currentPin`); household settings already exist.
 
 The API exposes no onboarding state; the client infers its onboarding step from API responses (absent settings, missing PIN).
 
@@ -899,7 +917,7 @@ Validation runs in three layers: **UI**, **API boundary** (DTO validation before
 | Child / Parent `DisplayName` | 100 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
 | Household `DisplayName` | 60 | Unicode letters, digits, space, `-`, `'`, `.` | Input/Display |
 | `CurrencyKey` (§2.1.1) | ≤ `CurrencyType.KeyMaxLength` | Must resolve via `CurrencyType.Parse(key)`; unknown keys rejected with `400` | Input/Display |
-| Transaction `Reason` | 255 | Free-form Unicode; control characters (U+0000–U+001F, U+007F) stripped; emoji restricted to `Constants.Transaction.ReasonEmojiWhitelist` — non-whitelisted emoji stripped at the API boundary | Input/Display |
+| Transaction `Reason` | 255 | Free-form Unicode; control characters (U+0000–U+001F, U+007F) stripped; emoji restricted to `Constants.Transaction.ReasonEmojiWhitelist` — non-whitelisted emoji stripped at the API boundary (authoritative); the client also strips them pre-submit for immediate feedback | Input/Display |
 | PINs (child & parent) | 4 | Exactly 4 digits, `^\d{4}$` | Input |
 | Invitation email | 320 | RFC-5322 shape; verified again by Firebase at acceptance | Input/Display |
 
@@ -925,7 +943,7 @@ Validation runs in three layers: **UI**, **API boundary** (DTO validation before
 
 `Household` is the sole tenant boundary. Enforcement is layered — no single layer is trusted alone:
 
-1. **Token resolution:** the auth middleware resolves the caller's identity into `HouseholdId` (parents) or `ChildId + HouseholdId` (children) claims. Requests without a resolved household are rejected before reaching controllers.
+1. **Token resolution:** the auth middleware resolves the caller's identity into `HouseholdId` (parents) or `ChildId + HouseholdId` (children) claims. Requests without a resolved household are rejected before reaching the endpoints.
 2. **Query scoping:** every tenant-scoped entity (`parents`, `children`, `transactions`, `household_invitations`, `audit_logs`) is filtered by `household_id` via EF Core global query filters seeded from the resolved claims. A query that omits the filter must be an explicit, reviewed exception.
 3. **Child session restriction:** child tokens additionally scope reads to their own `child_id`, and only read-only timeline/balance endpoints are exposed to child roles (FR-S2).
 4. **Real-time:** `LedgerHub.JoinChildGroup` verifies household ownership of the requested `child_id` before adding the connection to the group.
@@ -1069,3 +1087,9 @@ Run against a **real PostgreSQL** via Testcontainers (never mocked) so EF Core, 
 ### 13.4 Frameworks & Packages
 
 Test frameworks and libraries are listed in §1.5; versions are pinned centrally via `Directory.Packages.props` (§1.2).
+
+## 14. Future Considerations
+
+Recorded for post-V1 evaluation — out of scope for the MVP, no V1 work depends on them:
+
+* **Owner claim in the parent token:** embed `isOwner` as a Firebase custom claim (Admin SDK `setCustomUserClaims`) so ownership can be enforced in auth middleware without a database lookup. V1 instead resolves ownership from the `parents` array of `GET /api/v1/household` (§7.1) — custom claims are baked at mint time, go stale between token refreshes, and would require a claim-sync path on every ownership-relevant change.

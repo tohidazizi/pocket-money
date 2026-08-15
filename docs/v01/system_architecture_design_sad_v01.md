@@ -60,7 +60,7 @@ Dependency direction: Presentation → Core ← Infrastructure; Global reference
 │  PRESENTATION: PocketMoney.Api (ASP.NET Core 11)               │
 │   Middleware pipeline: IP-ban guard → AuthN (Firebase JWT │    │
 │   child JWT + security-stamp check) → household scoping →      │
-│   controllers → audit log                                      │
+│   endpoints → audit log                                        │
 │   LedgerHub (SignalR): real-time balance/timeline push         │
 ├────────────────────────────────────────────────────────────────┤
 │  CORE: PocketMoney.Application                                 │

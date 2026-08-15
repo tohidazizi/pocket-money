@@ -14,12 +14,12 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 
 | **SRS Requirement** | **SDS Implementation** |
 | ------------------- | ---------------------- |
-| **FR‑P1** Parent login via Firebase | DS §1.1, §1.4, §7.1 (Firebase Auth integration) |
+| **FR‑P1** Parent login via Firebase | DS §1.1, §1.4, §7.1 (Firebase Auth integration), §7.1.2 onboarding flow |
 | Initial household setup (default currency + PIN) | DS §7.1 (`PUT /api/v1/household/settings`), DS §7.1.2 onboarding flow, DS §2.3 `Household.DefaultCurrencyKey`, DS §2.1.1 CurrencyType |
 | Only first parent can delete household | DS §7.1 (`DELETE /api/v1/household`), DS §2.3 owner = earliest `Parent.CreatedAt`, DS §7.1.1 (`403 owner_only`), DS §8 Audit logging |
 | Physical deletion except audit logs | DS §7.1, DS §8 (append‑only audit log) |
 | **FR‑P2** Max 2 parents | DS §2.1 `MaxParentsPerHousehold = 2`, DS §5 invitation flow |
-| Parent invitation flow | DS §5 (SendGrid + token + Firebase) |
+| Parent invitation flow | DS §5 (SendGrid + token + Firebase), incl. sender-only cancellation (`DELETE /invitations/{id}`) |
 | Parent cannot remove other parent | DS §5 (no endpoint exists) |
 | Parent cannot remove self | DS §5 (no endpoint exists) |
 | **FR‑P3** Create child profiles (max 9) | DS §2.1 `ChildrenMax = 9`, DS §7.1 (`POST /api/v1/household/children`) |
@@ -61,7 +61,7 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | **NFR‑1** Atomicity | DS §4 EF transaction + `FOR UPDATE` |
 | **NFR‑2** Responsive UI | DS §1.1 Blazor WASM, DS §6 UI behavior |
 | **NFR‑3** Timeline performance | DS §2.4 composite index `(childId, createdAt, Id DESC)` |
-| **NFR‑4** PIN hashing | DS §2.3 Parent.PinHash, Child.PinHash |
+| **NFR‑4** PIN hashing | DS §2.3 `Parent.ParentPinHash` (empty = not set yet), `Child.PinHash` |
 | Record all unsuccessful login attempts | DS §3.3 LoginAttempt entity |
 | Lockout ladder (3→5m, 6→15m, 9→permanent) | DS §2.1 Lockout constants, DS §3.3 logic, DS §7.1.1 (`423 account_locked` / `account_permanently_locked`) |
 | Parent unlocks child account | DS §7.1 child PIN reset resets lockout |

@@ -6,7 +6,7 @@
 > * **Target Release:** V1 MVP
 > * **Document Status:** Approved / Final Baseline
 > * **Companion Docs:** SRS v1.0 (requirements) · SDS v1.0 (source of truth) · SAD v1.0 (architecture)
-> **Scope:** REST API surface of `PocketMoney.Api` — all 13 endpoints of SDS §7.1. SignalR (`/hubs/ledger`) is specified in SDS §7.2 and is outside this document.
+> **Scope:** REST API surface of `PocketMoney.Api` — all 14 endpoints of SDS §7.1. SignalR (`/hubs/ledger`) is specified in SDS §7.2 and is outside this document.
 
 ## 1. Conventions
 
@@ -19,12 +19,12 @@
 
 | Scheme | Bearer token | Applies to |
 | --- | --- | --- |
-| Parent | Firebase ID token | All `/household/*` routes except `accept-invite` and child-scoped reads |
-| Firebase | Firebase ID token | `POST /household/accept-invite` only |
+| Parent | Firebase ID token | All `/household/*` routes except `invitations/accept` and child-scoped reads |
+| Firebase | Firebase ID token | `POST /household/invitations/accept` only |
 | Child | Custom 365-day JWT embedding `child_id` + `security_stamp` claims (SDS §3.2) | `GET /household/children/me`, `GET /household/transactions` (own rows only) |
 | None | — | `POST /auth/child/login`, static assets (IP ban never blocks static assets, SRS NFR-4) |
 
-* Requests without a resolvable `household_id` are rejected before reaching controllers (SDS §10, layer 1).
+* Requests without a resolvable `household_id` are rejected before reaching the endpoints (SDS §10, layer 1).
 * Child JWT with a stale `security_stamp` → `401` (PIN was reset; device must re-authenticate, SDS §3.2).
 
 ### 1.3 Common Rules
@@ -37,22 +37,30 @@
 
 ### 1.4 Error Model
 
-All errors share one shape (SDS §7.1.1):
+All errors are ASP.NET Core **ProblemDetails** per RFC 9457 (SDS §7.0); statuses formally mapped in SDS §7.1.1:
 
 ```json
-{ 
-  "error": { 
-    "code": "negative_balance_not_acceptable", 
-    "message": "Human-readable detail." 
-  } 
+{
+  "type": "https://pocketmoney.app/errors/negative-balance",
+  "status": 422,
+  "title": "Negative balance not acceptable",
+  "detail": "Human-readable detail.",
+  "code": "negative_balance_not_acceptable"
 }
 ```
+
+* `type` — stable URI reference identifying the error class.
+* `status` — if present, number indicating the HTTP status code (only advisory),
+* `title` — short human-readable summary. It SHOULD NOT change from occurrence to occurrence of the problem, except for localization. See: [RFC 9110, section-12.1](https://www.rfc-editor.org/info/rfc9110/#section-12.1)
+* `detail` — human-readable instance-specific explanation to this occurrence of the problem.
+* `code` — extension member carrying the stable machine-readable codes from the table below.
+* Lockout responses extend ProblemDetails with `lockedUntil` (`LockedErrorDetails : ProblemDetails`, §2.1).
 
 | Status | Codes used | Meaning |
 | --- | --- | --- |
 | `400` | `validation_error` | SDS §9 violations: length, characters, format, decimal scale, unknown currency key |
 | `401` | `invalid_credentials`, `token_invalid`, `token_expired`, `security_stamp_mismatch` | Auth failures |
-| `403` | `ip_banned`, `owner_only` | IP ban (SDS §3.3); non-owner attempted household deletion (FR-P1) |
+| `403` | `ip_banned`, `owner_only`, `invitation_sender_only` | IP ban (SDS §3.3); non-owner attempted household deletion (FR-P1); invitation cancelled by a parent other than its sender (SDS §5 step 7) |
 | `404` | `not_found` | Missing resource, or resource outside caller's household |
 | `409` | `parent_cap_reached`, `invitation_pending`, `already_in_household`, `invitation_invalid`, `invitation_expired`, `children_max_reached` | Invitation-flow conflicts (SDS §5); child cap (SDS §2.1) |
 | `422` | `negative_balance_not_acceptable` | Business rule rejection after validation (SDS §4) |
@@ -86,8 +94,8 @@ Token lifetime: `Constants.Child.TokenLifetimeDays` = 365 days (FR-C2). The chil
 Errors:
 
 * `401 invalid_credentials` — wrong account ID or PIN; `unsuccessful_login_attempts` incremented (never reset by logout, FR-C2).
-* `423 account_locked` — body includes `lockedUntil` (5-min / 15-min tiers).
-* `423 account_permanently_locked` — 9+ cumulative failures; only a parent's PIN reset unlocks (SDS §7.1).
+* `423 account_locked` — ProblemDetails carries a `lockedUntil` extension (5-min / 15-min tiers).
+* `423 account_permanently_locked` — 9+ cumulative failures, **no** `lockedUntil` extension; only a parent's PIN reset unlocks (SDS §7.1).
 * `403 ip_banned` — IP is in an active ban (SDS §3.3 IpBan).
 
 **No logout endpoint:** child JWTs are stateless; logout discards the token locally and does not reset the failure counter (FR-C2).
@@ -114,7 +122,7 @@ UI should handle the page flow based on API responses to first-timers.
 
 ### 3.2 GET /household — parent JWT
 
-Parent landing-page payload: household info **plus the children list with current balances** (SDS §7.1). Also carries the data driving the invite-button rule (SDS §5 step 6). Max 9 children → no pagination.
+Parent landing-page payload: household info, the **`parents` array**, and **the children list with current balances** (SDS §7.1). Also carries the data driving the invite-button rule (SDS §5 step 6). Max 9 children / 2 parents → no pagination.
 
 `200`:
 
@@ -123,10 +131,15 @@ Parent landing-page payload: household info **plus the children list with curren
   "id": "…",
   "displayName": "The Azizi Family",
   "defaultCurrency": { "key": "USD", "symbol": "$", "country": "US", "title": "US Dollar", "nativeTitle": null, "decimalDigits": 2 },
-  "parentCount": 1,
   "maxParents": 2,
-  "pendingInvitation": { "email": "moj@example.com", "expiresAt": "2026-08-17T09:00:00Z" },
+  "pendingInvitations": [
+    { "id": "…", "email": "moj@example.com", "expiresAt": "2026-08-17T09:00:00Z" }
+  ],
   "createdAt": "2026-08-01T10:00:00Z",
+  "parents": [
+    { "id": "…", "displayName": "Tohid", "isOwner": true, "hasPin": true },
+    { "id": "…", "displayName": "Moj", "isOwner": false, "hasPin": true }
+  ],
   "children": [
     { "id": "…", "accountId": "MJ74K", "displayName": "Mia",
       "currency": { "key": "USD", "symbol": "$", "country": "US", "title": "US Dollar", "nativeTitle": null, "decimalDigits": 2 },
@@ -135,7 +148,8 @@ Parent landing-page payload: household info **plus the children list with curren
 }
 ```
 
-* `pendingInvitation` is `null` when none exists. Client hides/disables "Invite another parent" when `parentCount == maxParents` **or** `pendingInvitation != null` — server `409`s remain the authority (SDS §5 step 6).
+* `parents` — one entry per parent (max 2). `isOwner` = the household creator (earliest `Parent.CreatedAt`, SDS §2.3); the client matches the caller's Firebase UID against `id` to learn whether *it* is the owner (drives the delete-household affordance). `hasPin` = the parent has set their Parent Lock PIN; a first-timer with `hasPin: false` is routed through onboarding (SDS §7.1.2).
+* `pendingInvitation` is `null` when none exists. Client hides/disables "Invite another parent" when `parents.length >= maxParents` **or** `parents.length + pendingInvitations?.length > maxParent` — server `409`s remain the authority (SDS §5 step 6). Its `id` is the handle for cancellation (§3.7).
 * `locked` is `true` for timed or permanent lockout, so the parent dashboard can offer the PIN reset (the unlock path, SDS §7.1).
 
 ### 3.3 PUT /household/settings — parent JWT
@@ -158,7 +172,7 @@ Physical deletion of the tenant subtree; **owner parent only** (FR-P1). Irrevers
 * `204` — deleted. `audit_logs` and global `login_attempts` survive (SDS §10). Logged: `HouseholdDeleted`.
 * `403 owner_only` — caller is not the household creator (owner = earliest `Parent.CreatedAt` in the household, SDS §2.3).
 
-### 3.5 POST /household/invite — parent JWT
+### 3.5 POST /household/invitations — parent JWT
 
 Invites the 2nd parent (FR-P2, SDS §5).
 
@@ -172,7 +186,7 @@ Invites the 2nd parent (FR-P2, SDS §5).
 
 Logged: `ParentInvited` (SDS §8).
 
-### 3.6 POST /household/accept-invite — Firebase JWT
+### 3.6 POST /household/invitations/accept — Firebase JWT
 
 Links the accepting parent's Firebase UID to the household (SDS §5).
 
@@ -185,20 +199,28 @@ Links the accepting parent's Firebase UID to the household (SDS §5).
 * `409 parent_cap_reached` — cap re-checked **inside the acceptance transaction** (closes the two-invitations race, SDS §5 step 5).
 * `409 already_in_household` — the Firebase UID already belongs to a household, including one auto-created at first sign-in (SDS §2.4 one-parent–one-household rule).
 
+### 3.7 DELETE /household/invitations/{id} — parent JWT
+
+Cancels a pending invitation (SDS §5 step 7) — frees the household to send a new one.
+
+* `204` — cancelled. Logged: `ParentInvitationCancelled` (SDS §8).
+* `404 not_found` — no such invitation in the caller's household (or already accepted/expired).
+* `403 invitation_sender_only` — the caller is not the parent who sent it (SDS §5 step 7).
+
 ## 4. Parents
 
 ### 4.1 PUT /household/parents/me/pin — parent JWT
 
-Updates the caller's 4-digit Parent Lock PIN. Logged: `ParentPinChanged` (SDS §8).
+Sets or updates the caller's 4-digit Parent Lock PIN. Logged: `ParentPinChanged` (SDS §8).
 
 | Field | Type | Rules |
 | --- | --- | --- |
-| `currentPin` | string | `^\d{4}$` — must match stored hash |
+| `currentPin` | string? | `^\d{4}$` — **required when the caller already has a PIN** (`hasPin = true`, must match stored hash); **absent on the first-time set** (nothing to verify yet, SDS §2.3 sentinel, §7.1.2) |
 | `newPin` | string | `^\d{4}$` |
 
 * `200` — `{ }`.
 * `401 invalid_credentials` — `currentPin` mismatch.
-* `400 validation_error` — format violations.
+* `400 validation_error` — format violations (including `currentPin` supplied with `hasPin: false`, or omitted with `hasPin: true`).
 
 ## 5. Children
 
@@ -335,7 +357,10 @@ The endpoint surface above matches SDS §7.1 exactly (all former "derived endpoi
 * SignalR `OnBalanceUpdated` also fired after a currency change (§5.3) → **SDS §7.2**.
 * Household owner = earliest `Parent.CreatedAt` (owner-only deletion) → **SDS §2.3**.
 * Reason substring search on the timeline → **SDS §7.1 / §12.2**.
+* `parents` array with `isOwner` / `hasPin` (owner detection, onboarding signal) → **SDS §7.1** GET row.
+* ProblemDetails (RFC 9457) error model, `lockedUntil` extension, Minimal APIs → **SDS §7.0, §7.1.1**.
+* Invitation cancellation (`DELETE /household/invitations/{id}`, sender only) → **SDS §5 step 7**.
 
 Remaining API-level detail without an SDS statement:
 
-* `PUT /household/parents/me/pin` request shape (`currentPin` verification before change) — request/response contract lives here (§4.1); SDS §7.1 names the operation only.
+* `PUT /household/parents/me/pin` request shape (`currentPin` required only when a PIN exists) — request/response contract lives here (§4.1); SDS §7.1 names the operation only.
