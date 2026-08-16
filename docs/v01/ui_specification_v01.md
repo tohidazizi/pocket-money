@@ -15,15 +15,47 @@ This document captures the **UI-layer decisions** agreed between product and eng
 * **Component library:** MudBlazor (Material Design). The prototype and the final UI are built on the same design language so prototype screens map ~1:1 to MudBlazor components (AppBar, Cards, FAB, Dialog, NavDrawer, …).
 * **Design language:** Google Material Design 3 conventions:
   * Color roles (primary / surface / outline / error), tonal palettes.
-  * 8 dp spacing grid; elevation levels; Roboto typeface.
+  * 8 dp spacing grid; elevation levels; Nunito typeface (§1.1).
   * 48 px minimum touch targets (NFR-2 touch-friendly).
   * One shared MD3 theme for parent and child surfaces, differentiated by accent color (parent = primary, child = secondary accent) — not two separate themes.
 * **Prototype form:** static HTML/CSS/JS implementing the same MD3 tokens, so every screen is reviewable in any browser without hosting.
 
+### 1.1 Theme Palette (approved, Prototype 3)
+
+The approved visual identity is "Ledger Paper": warm cream surfaces, deep ledger-green primary, warm amber child accent, muted brick tertiary, muted-red error. MD3 is a token system — the architecture (color roles, spacing, components) stays MudBlazor-compatible while the values are custom. `ui_prototype_v03.html` is the accepted visual reference (v01/v02 remain in the folder as history only).
+
+| MD3 role | Value | MudBlazor `Palette` field |
+| --- | --- | --- |
+| Primary | `#14603F` | `Primary` |
+| On Primary | `#FDFBF3` | `PrimaryDarkText` |
+| Primary Container | `#DFEDDD` | `PrimaryLighten` |
+| On Primary Container | `#12341F` | — |
+| Secondary (child accent) | `#B26A1B` | `Secondary` |
+| On Secondary | `#FFF8EE` | `SecondaryDarkText` |
+| Secondary Container | `#F7E6C8` | `SecondaryLighten` |
+| On Secondary Container | `#4A3007` | — |
+| Tertiary | `#93493A` | `Tertiary` |
+| Tertiary Container | `#F6DFD3` | `TertiaryLighten` |
+| Background | `#F4F1E7` | `AppbarBackground` / `Background` |
+| Surface | `#FBF9F2` | `Surface` |
+| Surface Low / High | `#F8F5EC` / `#F1EDE0` | neutral row/hover tones |
+| On Surface | `#26312A` | `TextPrimary` |
+| On Surface Variant | `#5C6B60` | `TextSecondary` |
+| Outline / Variant | `#8FA092` / `#DCE3D4` | `LinesDefault` / `LinesInputs` |
+| Error / Debit | `#C23D3D` | `Error` |
+| Error Container | `#FBEAEA` | `ErrorLighten` |
+| Success / Credit | `#147047` | `Success` |
+| Success Container | `#E7F2EC` | `SuccessLighten` |
+| Lock badge | `#F7E6C8` bg / `#7A5410` ink | custom chip style |
+
+* **Typography:** Nunito, weights 400/600/700/800 (800 for headings & emphasis).
+* **Iconography:** parent surfaces use SVG/Material icons only — no emoji. Playful emoji is allowed on child surfaces and inside transaction reasons (subject to the whitelist, SDS §9.2).
+* **Spacing/shape:** 8 px grid; radii 10/14/18/26 px; 48 px minimum touch targets; pill buttons (100 px radius).
+
 ## 2. Responsiveness
 
 * **Single breakpoint:** `768 px` viewport width.
-  * `< 768 px` — phones & small tablets: single column, bottom navigation, full-width cards, FAB for primary actions.
+  * `< 768 px` — phones & small tablets: single column, bottom navigation, full-width cards.
   * `≥ 768 px` — large tablets, laptops, monitors: navigation rail/drawer + multi-column content (child card grid, timeline beside summary).
 * Every screen must be specified at both sizes (NFR-2).
 
