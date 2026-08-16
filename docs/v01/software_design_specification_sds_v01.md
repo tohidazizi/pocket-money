@@ -307,6 +307,7 @@ public enum AuditEventType
 {
     ChildCreated,
     ChildPinReset,
+    ChildAccountLocked,
     ChildAccountUnlocked,
     ChildCurrencyChanged,
     ParentPinChanged,
@@ -381,7 +382,7 @@ public sealed class Child
     public DateTimeOffset? LockedUntil { get; set; }
     public bool IsPermanentlyLocked => LockedUntil == DateTimeOffset.MaxValue;
     
-    // Security Stamp changes on PIN reset to invalidate active 365-day tokens
+    // Security Stamp changes on PIN reset and on manual lock/unlock (FR-P8) to invalidate active 365-day tokens
     public Guid SecurityStamp { get; set; } = Guid.NewGuid(); 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -608,11 +609,11 @@ public static class Base31Generator
 
 ### 3.2 Child Auth Token Invalidation Mechanism
 
-When a parent updates a child's PIN (FR-P4):
+`Child.SecurityStamp` rotates on every security-relevant change — PIN update (FR-P4), manual lock, and manual unlock (FR-P8):
 
-1. The backend updates `Child.PinHash` and generates a new `Child.SecurityStamp = Guid.NewGuid()`.
+1. The backend applies the change (updates `Child.PinHash`, or sets/clears `Child.LockedUntil`) and generates a new `Child.SecurityStamp = Guid.NewGuid()`.
 2. Active 365-day child JWTs embed the claim `security_stamp`.
-3. The API JWT Validation middleware checks the token's `security_stamp` against the database/cache record for that `ChildId`. If mismatched, it throws HTTP 401 Unauthorized, forcing the child device to re-authenticate with the new PIN.
+3. The API JWT Validation middleware checks the token's `security_stamp` against the database/cache record for that `ChildId`. If mismatched, it throws HTTP 401 Unauthorized, forcing the child device to re-authenticate.
 
 ### 3.3 Account Lockout & Global IP Ban Logic
 
@@ -681,6 +682,14 @@ public async Task HandleFailedLoginAsync(string accountId, ClientInfo clientInfo
 }
 
 ```
+
+### 3.4 Manual Lock / Unlock (FR-P8)
+
+Parents lock and unlock a child account explicitly via `PUT /api/v1/household/children/{id}/lock` (§7.1). Semantics:
+
+* **Lock** (`{ "locked": true }`): sets `LockedUntil = DateTimeOffset.MaxValue` (same representation as a permanent ladder lock) and rotates `SecurityStamp` — active child sessions die with `401 security_stamp_mismatch`. The child cannot log in and its PIN cannot be changed (`423 account_locked` on `PUT …/pin`). Audit: `ChildAccountLocked`.
+* **Unlock** (`{ "locked": false }`): clears `LockedUntil` (`null`) and resets `UnsuccessfulLoginAttempts = 0`, so the ladder restarts fresh; rotates `SecurityStamp`. Unlocking does **not** change the PIN. Audit: `ChildAccountUnlocked`.
+* The lockout ladder (§3.3) and manual lock share `LockedUntil`; a timed ladder lock (5/15 min) simply expires on its own, while `MaxValue` (permanent ladder lock or manual lock) requires a parent unlock.
 
 ## 4. Concurrency Control & Atomic Transactions
 
@@ -757,7 +766,7 @@ public async Task<TransactionResultDto> CreateTransactionAsync(CreateTransaction
 
 ### 6.1 Inactivity Lock Timer (`PocketMoney.Client/Services/InactivityTimerService.cs`)
 
-Parent PIN lock (FR-P6) is strictly a client-side route guard.
+Parent PIN lock (FR-P6) is strictly a client-side route guard. The Parent Lock PIN exists **solely** to resume an idle-locked parent session (FR-S1) — it is not an admin gate between child and parent sessions; there is no "switch to parent" affordance on child screens.
 
 ```csharp
 public class InactivityTimerService : IDisposable
@@ -803,7 +812,8 @@ public class InactivityTimerService : IDisposable
 | `POST` | `/api/v1/household/invitations/accept` | Firebase JWT | Links 2nd parent to household |
 | `DELETE` | `/api/v1/household/invitations/{id}` | Parent JWT | Cancels a pending invitation — **sender only** (§5 step 7); row deleted, `ParentInvitationCancelled` audit-logged |
 | `POST` | `/api/v1/household/children` | Parent JWT | Creates child profile & generates Base31 Account ID; child inherits `Household.DefaultCurrencyKey`. The generated initial PIN is returned **only once** — in this creation response — and is never retrievable afterwards |
-| `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN, resets lockout, invalidates child tokens |
+| `PUT` | `/api/v1/household/children/{id}/pin` | Parent JWT | Updates child PIN and invalidates child tokens (§3.2). Rejected with `423 account_locked` while the account is locked — a locked account must be unlocked first (§3.4); unlocking never requires a PIN change |
+| `PUT` | `/api/v1/household/children/{id}/lock` | Parent JWT | Manually locks or unlocks a child account (`{ "locked": bool }`, §3.4): lock sets `LockedUntil = MaxValue`; unlock clears it and resets the failure counter. Rotates `SecurityStamp`; audit-logged as `ChildAccountLocked` / `ChildAccountUnlocked` |
 | `PUT` | `/api/v1/household/children/{id}/currency` | Parent JWT | Changes a child's currency (§2.1.1): balance carries over numerically, ledger rows keep their original currency snapshot; audit-logged as `ChildCurrencyChanged` |
 | `PUT` | `/api/v1/household/parents/me/pin` | Parent JWT | Sets or updates the caller's Parent Lock PIN; `currentPin` required only when a PIN already exists (`hasPin = true`, §2.3) |
 | `GET` | `/api/v1/household/transactions` | Parent / Child | Gets all transactions; filterable by `childId`, transaction type (`CREDIT`/`DEBIT`), transaction date range, amount range; searchable by transaction reason (case-insensitive substring); Keyset-paginated timeline, `created_at DESC` (§12), Params: `cursor` (opaque, omit for first page), `pageSize` (default `Timeline.DefaultPageSize`, capped at `Timeline.MaxPageSize`). Response: `{ items, nextCursor }` — `nextCursor: null` signals end of history \*\* |
@@ -828,7 +838,7 @@ The endpoint table defines operations; this section fixes the HTTP status each o
 | `423` | `account_locked`, `account_permanently_locked` | Child lockout ladder (§2.1 Lockout, §3.3); timed tiers carry `lockedUntil` |
 
 * `422` marks a well-formed request that domain logic rejects (§4 negative balance) — distinct from `400`, which marks malformed input (§9).
-* `423` (Locked, WebDAV origin) is chosen over `429 Too Many Requests`: the account is locked, not merely rate-limited — a correct PIN would still fail until the tier expires (or, for permanent lock, until a parent PIN reset, §3.3).
+* `423` (Locked, WebDAV origin) is chosen over `429 Too Many Requests`: the account is locked, not merely rate-limited — a correct PIN would still fail until the tier expires (or, for permanent lock — ladder or manual — until a parent unlocks the account, §3.4).
 * The PIN is not brute-forceable anyway: each attempt is metered (§3.3) and the lockout ladder caps effective attempts per window.
 
 #### 7.1.2 Parent Onboarding Flow

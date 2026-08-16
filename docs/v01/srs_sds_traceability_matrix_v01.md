@@ -27,7 +27,8 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | Account ID uniqueness | DS §2.4 unique index, DS §3.1 retry logic |
 | Initial random PIN | DS §7.1 child creation flow — returned once in the creation response, never retrievable again |
 | New child inherits household default currency | DS §2.3 `Child.CurrencyKey`, DS §2.1.1 |
-| **FR‑P4** Child PIN reset | DS §7.1 (`PUT /api/v1/household/children/{id}/pin`), DS §3.2 token invalidation |
+| **FR‑P4** Child PIN reset | DS §7.1 (`PUT /api/v1/household/children/{id}/pin`, `423` while locked), DS §3.2 token invalidation |
+| **FR‑P8** Child account lock/unlock | DS §3.4 manual lock/unlock semantics, DS §7.1 (`PUT /api/v1/household/children/{id}/lock`), DS §8 (`ChildAccountLocked` / `ChildAccountUnlocked`) |
 | **FR‑P7** Child currency change | DS §7.1 (`PUT /api/v1/household/children/{id}/currency`), DS §2.1.1, DS §4 (`CurrencyKey` snapshot per ledger row), DS §8 (`ChildCurrencyChanged`) |
 | **FR‑P5** Transaction logging | DS §4 atomic transaction logic |
 | Negative balance rejection | DS §4 (rollback on `< 0`), DS §7.1.1 (`422 negative_balance_not_acceptable`) |
@@ -51,7 +52,7 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 
 | **SRS Requirement** | **SDS Implementation** |
 | ------------------- | ---------------------- |
-| **FR‑S1** Parent PIN modal | DS §6 Shared Device Guard |
+| **FR‑S1** Session separation (no switch-to-parent affordance; Parent PIN = idle-unlock only) | DS §6.1 scope note, UI SRS ChildrenHistory flow |
 | **FR‑S2** Strict data isolation | DS §10 Multi-Tenant Enforcement, DS §7.2 SignalR group isolation, DS §7.1 child‑scoped endpoints |
 
 ## 4. Non‑Functional Requirements (NFR)
@@ -61,7 +62,7 @@ This matrix ensures every requirement in the **Software Requirements Specificati
 | **NFR‑1** Atomicity | DS §4 EF transaction + `FOR UPDATE` |
 | **NFR‑2** Responsive UI | DS §1.1 Blazor WASM, DS §6 UI behavior |
 | **NFR‑3** Timeline performance | DS §2.4 composite index `(childId, createdAt, Id DESC)` |
-| **NFR‑4** PIN hashing | DS §2.3 `Parent.ParentPinHash` (empty = not set yet), `Child.PinHash` |
+| **NFR‑4** PIN hashing & lockout ladder | DS §2.3 `Parent.ParentPinHash` (empty = not set yet), `Child.PinHash`, DS §3.3 ladder, DS §3.4 unlock without PIN change |
 | Record all unsuccessful login attempts | DS §3.3 LoginAttempt entity |
 | Lockout ladder (3→5m, 6→15m, 9→permanent) | DS §2.1 Lockout constants, DS §3.3 logic, DS §7.1.1 (`423 account_locked` / `account_permanently_locked`) |
 | Parent unlocks child account | DS §7.1 child PIN reset resets lockout |

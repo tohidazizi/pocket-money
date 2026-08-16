@@ -6,7 +6,7 @@
 > * **Target Release:** V1 MVP
 > * **Document Status:** Approved / Final Baseline
 > * **Companion Docs:** SRS v1.0 (requirements) · SDS v1.0 (source of truth) · SAD v1.0 (architecture)
-> **Scope:** REST API surface of `PocketMoney.Api` — all 14 endpoints of SDS §7.1. SignalR (`/hubs/ledger`) is specified in SDS §7.2 and is outside this document.
+> **Scope:** REST API surface of `PocketMoney.Api` — all 15 endpoints of SDS §7.1. SignalR (`/hubs/ledger`) is specified in SDS §7.2 and is outside this document.
 
 ## 1. Conventions
 
@@ -64,7 +64,7 @@ All errors are ASP.NET Core **ProblemDetails** per RFC 9457 (SDS §7.0); statuse
 | `404` | `not_found` | Missing resource, or resource outside caller's household |
 | `409` | `parent_cap_reached`, `invitation_pending`, `already_in_household`, `invitation_invalid`, `invitation_expired`, `children_max_reached` | Invitation-flow conflicts (SDS §5); child cap (SDS §2.1) |
 | `422` | `negative_balance_not_acceptable` | Business rule rejection after validation (SDS §4) |
-| `423` | `account_locked`, `account_permanently_locked` | Child account lockout (SDS §2.1 Lockout, §3.3) |
+| `423` | `account_locked`, `account_permanently_locked` | Child account lockout (SDS §2.1 Lockout, §3.3) or manually locked by a parent (SDS §3.4); also returned by `PUT …/children/{id}/pin` while locked |
 
 ## 2. Auth — Child
 
@@ -89,13 +89,13 @@ Request:
 }
 ```
 
-Token lifetime: `Constants.Child.TokenLifetimeDays` = 365 days (FR-C2). The child dashboard data (balance + currency) comes from `GET /household/children/me` (§5.4), not from the login response.
+Token lifetime: `Constants.Child.TokenLifetimeDays` = 365 days (FR-C2). The child dashboard data (balance + currency) comes from `GET /household/children/me` (§5.5), not from the login response.
 
 Errors:
 
 * `401 invalid_credentials` — wrong account ID or PIN; `unsuccessful_login_attempts` incremented (never reset by logout, FR-C2).
 * `423 account_locked` — ProblemDetails carries a `lockedUntil` extension (5-min / 15-min tiers).
-* `423 account_permanently_locked` — 9+ cumulative failures, **no** `lockedUntil` extension; only a parent's PIN reset unlocks (SDS §7.1).
+* `423 account_permanently_locked` — 9+ cumulative failures **or** manually locked by a parent, **no** `lockedUntil` extension; only a parent's unlock clears it (§5.3, SDS §3.4).
 * `403 ip_banned` — IP is in an active ban (SDS §3.3 IpBan).
 
 **No logout endpoint:** child JWTs are stateless; logout discards the token locally and does not reset the failure counter (FR-C2).
@@ -143,14 +143,14 @@ Parent landing-page payload: household info, the **`parents` array**, and **the 
   "children": [
     { "id": "…", "accountId": "MJ74K", "displayName": "Mia",
       "currency": { "key": "USD", "symbol": "$", "country": "US", "title": "US Dollar", "nativeTitle": null, "decimalDigits": 2 },
-      "currentBalance": 87.5, "locked": false }
+      "currentBalance": 87.5, "locked": false, "lockedUntil": null }
   ]
 }
 ```
 
 * `parents` — one entry per parent (max 2). `isOwner` = the household creator (earliest `Parent.CreatedAt`, SDS §2.3); the client matches the caller's Firebase UID against `id` to learn whether *it* is the owner (drives the delete-household affordance). `hasPin` = the parent has set their Parent Lock PIN; a first-timer with `hasPin: false` is routed through onboarding (SDS §7.1.2).
 * `pendingInvitation` is `null` when none exists. Client hides/disables "Invite another parent" when `parents.length >= maxParents` **or** `parents.length + pendingInvitations?.length > maxParent` — server `409`s remain the authority (SDS §5 step 6). Its `id` is the handle for cancellation (§3.7).
-* `locked` is `true` for timed or permanent lockout, so the parent dashboard can offer the PIN reset (the unlock path, SDS §7.1).
+* `locked` is `true` for any lock — timed ladder, permanent ladder, or manual (FR-P8) — so the parent dashboard can render the lock badge and offer the unlock action (§5.3, SDS §3.4). `lockedUntil` is set for timed ladder locks (drives the live countdown) and `null` otherwise, including permanent/manual locks.
 
 ### 3.3 PUT /household/settings — parent JWT
 
@@ -245,19 +245,37 @@ Creates a child profile (FR-P3). Server generates the Base-31 Account ID (unique
 
 ### 5.2 PUT /household/children/{id}/pin — parent JWT
 
-Sets a new child PIN (FR-P4). Side effects (SDS §3.2, §7.1):
+Sets a new child PIN (FR-P4). Side effects (SDS §3.2):
 
 1. `PinHash` updated;
-2. `SecurityStamp` rotated → all active 365-day child tokens rejected with `401`;
-3. lockout counters reset (`unsuccessful_login_attempts = 0`, `locked_until = null`) — this is also the **parent unlock** mechanism (NFR-4).
+2. `SecurityStamp` rotated → all active 365-day child tokens rejected with `401`.
+
+PIN change does **not** clear a lock: while the account is locked (ladder or manual, SDS §3.3/§3.4), this endpoint returns `423 account_locked` — the parent must unlock first (§5.3), which never requires a PIN change.
 
 | Field | Type | Rules |
 | --- | --- | --- |
 | `newPin` | string | `^\d{4}$` |
 
-* `200` — `{ }`. Logged: `ChildPinReset` (+ `ChildAccountUnlocked` when it clears a lockout).
+* `200` — `{ }`. Logged: `ChildPinReset`.
+* `423 account_locked` — account is locked; unlock it via §5.3 instead.
 
-### 5.3 PUT /household/children/{id}/currency — parent JWT
+### 5.3 PUT /household/children/{id}/lock — parent JWT
+
+Manually locks or unlocks a child account (FR-P8, SDS §3.4). Unlocking is the **parent unlock** mechanism for both ladder lockouts (NFR-4) and manual locks — it never changes the PIN.
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `locked` | bool | `true` = lock, `false` = unlock |
+
+Semantics:
+
+* **lock** → `lockedUntil = MaxValue` (same representation as permanent ladder lock), `SecurityStamp` rotated → active child tokens rejected with `401`. Logged: `ChildAccountLocked`.
+* **unlock** → `lockedUntil = null`, `unsuccessfulLoginAttempts = 0` (ladder restarts), `SecurityStamp` rotated. Logged: `ChildAccountUnlocked`.
+
+* `200` — `{ }`.
+* `404 not_found` — child outside caller's household.
+
+### 5.4 PUT /household/children/{id}/currency — parent JWT
 
 Changes a child's currency (FR-P7, SDS §2.1.1). Semantics:
 
@@ -271,7 +289,7 @@ Changes a child's currency (FR-P7, SDS §2.1.1). Semantics:
 * `200` — `{ "currency": { …resolved record… }, "currentBalance": 87.5 }`. Logged: `ChildCurrencyChanged` (SDS §8).
 * Then SignalR `OnBalanceUpdated` push to group `child_{id}` so the child's open dashboard re-renders in the new denomination (SDS §7.2).
 
-### 5.4 GET /household/children/me — child JWT
+### 5.5 GET /household/children/me — child JWT
 
 Child dashboard source (FR-C3, SDS §7.1). Server scopes the child JWT to its own `child_id` (SDS §10 layer 3).
 
@@ -354,7 +372,7 @@ The endpoint surface above matches SDS §7.1 exactly (all former "derived endpoi
 * Error status mapping (`422` negative balance, `423` lockouts, `403` IP ban) → **SDS §7.1.1**.
 * Parent onboarding flow (first parent: settings + PIN; second parent: PIN only) → **SDS §7.1.2**.
 * `initialPin` returned only in the `POST /household/children` response → **SDS §7.1** child-creation row.
-* SignalR `OnBalanceUpdated` also fired after a currency change (§5.3) → **SDS §7.2**.
+* SignalR `OnBalanceUpdated` also fired after a currency change (§5.4) → **SDS §7.2**.
 * Household owner = earliest `Parent.CreatedAt` (owner-only deletion) → **SDS §2.3**.
 * Reason substring search on the timeline → **SDS §7.1 / §12.2**.
 * `parents` array with `isOwner` / `hasPin` (owner detection, onboarding signal) → **SDS §7.1** GET row.
