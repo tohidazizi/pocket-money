@@ -30,7 +30,7 @@
 
 ## 5. Deployment & Operations
 
-- [  ] CI/CD Pipeline Configuration
+- [  ] [X] CI/CD Pipeline Configuration
 - [  ] Operations Runbook & Incident Response Guide
 - [  ] End-User Documentation / Release Notes
 
