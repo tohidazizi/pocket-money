@@ -3,7 +3,7 @@
 ## 1. Planning & Requirements
 
 - [  ] Product Requirement Document (PRD)
-- [X] UI Specification
+- [X] Software Requirements Specification (SRS)
 - [X] UI Specification
 - [  ] Agile User Stories & Epics
 
@@ -15,7 +15,7 @@
 - [X] SAD ↔ SDS Traceability Matrix
 - [  ] Database Schema / Entity-Relationship Diagrams
 - [X] API Specifications
-- [.] UI Prototype
+- [X] UI Prototype
 
 ## 3. Implementation & Code
 

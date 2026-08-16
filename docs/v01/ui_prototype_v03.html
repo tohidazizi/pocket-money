@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pocket-Money — UI Prototype v0.3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   THEME — "Ledger Paper": Prototype-1 DNA mapped onto MD3 color roles.
+   Every value below maps 1:1 to a MudBlazor custom-theme palette entry.
+   ========================================================================== */
+:root {
+  /* Primary — deep ledger green */
+  --primary: #14603F;
+  --on-primary: #FDFBF3;
+  --primary-container: #DFEDDD;
+  --on-primary-container: #12341F;
+  /* Secondary — warm amber (child accent) */
+  --secondary: #B26A1B;
+  --on-secondary: #FFF8EE;
+  --secondary-container: #F7E6C8;
+  --on-secondary-container: #4A3007;
+  /* Tertiary — muted brick */
+  --tertiary: #93493A;
+  --tertiary-container: #F6DFD3;
+  --on-tertiary-container: #3D1810;
+  /* Surfaces — cream paper */
+  --bg: #F4F1E7;
+  --surface: #FBF9F2;
+  --surface-low: #F8F5EC;
+  --surface-high: #F1EDE0;
+  --on-surface: #26312A;
+  --on-surface-variant: #5C6B60;
+  --outline: #8FA092;
+  --outline-variant: #DCE3D4;
+  /* Error / debit — muted red */
+  --error: #C23D3D;
+  --on-error: #FFF6F3;
+  --error-container: #FBEAEA;
+  --on-error-container: #5A1F1F;
+  /* Success / credit */
+  --success: #147047;
+  --success-container: #E7F2EC;
+  --on-success-container: #10502F;
+  /* Warm lock badge */
+  --lock-bg: #F7E6C8; --lock-ink: #7A5410; --lock-line: #E8CE9E;
+
+  --elev-1: 0 1px 2px rgba(38,49,42,.12), 0 1px 4px rgba(38,49,42,.08);
+  --elev-2: 0 2px 8px rgba(38,49,42,.16);
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+  --r-s:10px; --r-m:14px; --r-l:18px; --r-xl:26px;
+  --touch:48px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { background: var(--bg); }
+body {
+  font-family: "Nunito", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg); color: var(--on-surface);
+  min-height: 100vh; line-height: 1.45;
+}
+h1 { font-size:1.8rem; font-weight:800; }
+h2 { font-size:1.35rem; font-weight:800; }
+h3 { font-size:1.05rem; font-weight:800; }
+.muted { color: var(--on-surface-variant); font-size:.875rem; }
+.small { font-size:.8125rem; }
+.grow { flex:1; }
+.center { text-align:center; }
+.icon { width:24px; height:24px; fill: currentColor; flex-shrink:0; }
+.icon.s18 { width:18px; height:18px; }
+
+/* ==========================================================================
+   COMPONENTS
+   ========================================================================== */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2);
+  min-height:var(--touch); padding:0 var(--sp-5);
+  border:none; border-radius:100px; cursor:pointer;
+  font:700 .9rem/1 "Nunito", sans-serif;
+  transition: box-shadow .15s, transform .05s;
+  text-decoration:none;
+}
+.btn:active { transform: translateY(1px); }
+.btn-filled { background: var(--primary); color: var(--on-primary); }
+.btn-filled:hover { box-shadow: var(--elev-1); }
+.btn-filled.amber { background: var(--secondary); color: var(--on-secondary); }
+.btn-tonal { background: var(--primary-container); color: var(--on-primary-container); }
+.btn-tonal.amber { background: var(--secondary-container); color: var(--on-secondary-container); }
+.btn-outlined { background: transparent; color: var(--primary); border:1.5px solid var(--outline); }
+.btn-text { background: transparent; color: var(--primary); padding:0 var(--sp-3); }
+.btn-danger { background: var(--error); color: var(--on-error); }
+.btn-danger-tonal { background: var(--error-container); color: var(--on-error-container); }
+.btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+.btn-block { width:100%; }
+.btn-big { min-height:56px; font-size:1rem; border-radius: var(--r-m); }
+
+.icon-btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:var(--touch); height:var(--touch); border-radius:50%;
+  border:none; background:transparent; cursor:pointer; color: var(--on-surface-variant);
+}
+.icon-btn:hover { background: rgba(38,49,42,.07); }
+
+.card { background: var(--surface); border:1px solid var(--outline-variant); border-radius: var(--r-m); padding: var(--sp-4); }
+.card-elev { background: var(--surface); border:1px solid var(--outline-variant); border-radius: var(--r-l); box-shadow: var(--elev-1); }
+.card.clickable { cursor:pointer; transition: box-shadow .15s; }
+.card.clickable:hover { box-shadow: var(--elev-2); }
+
+.chip {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:5px 12px; border-radius:8px; font-size:.8rem; font-weight:800;
+  border:none; background: var(--surface-high); color: var(--on-surface-variant);
+}
+.badge-lock { background: var(--lock-bg); color: var(--lock-ink); }
+.badge-perm { background: var(--error-container); color: var(--on-error-container); }
+.badge-ok { background: var(--success-container); color: var(--on-success-container); }
+.badge-owner { background: var(--primary-container); color: var(--on-primary-container); }
+
+.field { display:flex; flex-direction:column; gap:var(--sp-1); margin-bottom: var(--sp-4); }
+.field label { font-size:.8rem; font-weight:800; color: var(--on-surface-variant); }
+.field input, .field select {
+  min-height:var(--touch); padding:0 var(--sp-4);
+  border:1.5px solid var(--outline-variant); border-radius: var(--r-s);
+  background: var(--surface); font:600 1rem "Nunito", sans-serif; color: var(--on-surface);
+  outline:none; width:100%;
+}
+.field input:focus, .field select:focus { border-color: var(--primary); }
+.field .hint { font-size:.75rem; color: var(--on-surface-variant); }
+.field .err { font-size:.75rem; color: var(--error); display:none; }
+.field.invalid input { border-color: var(--error); }
+.field.invalid .err { display:block; }
+
+/* Account ID — 5 separate boxes */
+.aid-row { display:flex; gap:8px; }
+.aid-row input {
+  width:52px; height:56px; text-align:center; text-transform:uppercase;
+  font:800 1.4rem "Nunito", sans-serif; letter-spacing:0;
+  border:1.5px solid var(--outline-variant); border-radius: var(--r-s);
+  background: var(--surface); color: var(--on-surface); outline:none;
+}
+.aid-row input:focus { border-color: var(--primary); background: var(--primary-container); }
+
+.pin-dots { display:flex; gap:14px; justify-content:center; margin: var(--sp-5) 0; }
+.pin-dots span { width:16px; height:16px; border-radius:50%; border:2px solid var(--outline); transition: background .1s; }
+.pin-dots span.on { background: var(--primary); border-color: var(--primary); }
+.pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-2); max-width:320px; margin:0 auto; }
+.pin-pad button {
+  height:60px; border:none; border-radius:16px; font:800 1.4rem "Nunito", sans-serif;
+  background: var(--surface); color: var(--on-surface); cursor:pointer;
+  border:1px solid var(--outline-variant);
+}
+.pin-pad button:active { background: var(--primary-container); }
+.pin-pad button.util { font-size:.9rem; color: var(--on-surface-variant); background:transparent; border:none; }
+
+.appbar {
+  display:flex; align-items:center; gap:var(--sp-2);
+  padding:var(--sp-3) var(--sp-4); min-height:64px;
+  background: var(--surface); border-bottom:1px solid var(--outline-variant);
+  position:sticky; top:0; z-index:10;
+}
+.appbar .titles { line-height:1.2; min-width:0; }
+.appbar .titles .t1 { font-size:1.15rem; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.appbar .titles .t2 { font-size:.8rem; font-weight:700; color: var(--on-surface-variant); }
+.idle-chip {
+  display:none; align-items:center; gap:6px;
+  background: var(--lock-bg); color: var(--lock-ink);
+  font:800 .85rem "Nunito", sans-serif; padding:6px 12px; border-radius:100px;
+}
+.idle-chip.show { display:inline-flex; }
+
+/* Navigation */
+.bottomnav {
+  position:fixed; bottom:0; left:0; right:0; z-index:20;
+  display:flex; background: var(--surface); border-top:1px solid var(--outline-variant); height:76px;
+}
+.bottomnav button, .bottomnav .navback {
+  flex:1; border:none; background:none; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  font:800 .72rem "Nunito", sans-serif; color: var(--on-surface-variant);
+}
+.bottomnav button.active { color: var(--on-primary-container); }
+.bottomnav .ico, .navrail .ico {
+  width:56px; height:30px; border-radius:15px;
+  display:flex; align-items:center; justify-content:center;
+}
+.bottomnav button.active .ico { background: var(--primary-container); color: var(--on-primary-container); }
+.navrail { display:none; }
+
+/* Alerts — ProblemDetails surfaces */
+.alert {
+  border-radius: var(--r-m); padding: var(--sp-3) var(--sp-4); margin: var(--sp-3) 0;
+  display:none; font-size:.875rem; border:1px solid transparent;
+}
+.alert.open { display:block; }
+.alert-error { background: var(--error-container); color: var(--on-error-container); border-color:#EBC5C5; }
+.alert-warn { background: var(--lock-bg); color: var(--lock-ink); border-color: var(--lock-line); }
+.alert-info { background: var(--primary-container); color: var(--on-primary-container); }
+.alert .pd-title { font-weight:800; display:block; }
+.alert .pd-foot { font-size:.75rem; opacity:.75; display:block; margin-top:6px; font-weight:700; }
+
+.tx-list { display:flex; flex-direction:column; gap:var(--sp-2); }
+.tx-row {
+  display:flex; align-items:flex-start; gap:var(--sp-3);
+  background: var(--surface); border:1px solid var(--outline-variant);
+  border-radius: var(--r-m); padding: var(--sp-3) var(--sp-4);
+}
+.tx-ico {
+  width:38px; height:38px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.tx-ico.credit { background: var(--success-container); color: var(--success); }
+.tx-ico.debit { background: var(--error-container); color: var(--error); }
+.tx-meta { display:block; font-size:.75rem; color: var(--on-surface-variant); margin-top:2px; }
+.tx-amount.credit { color: var(--success); font-weight:800; white-space:nowrap; }
+.tx-amount.debit { color: var(--error); font-weight:800; white-space:nowrap; }
+
+.empty { text-align:center; padding: var(--sp-6) var(--sp-4); color: var(--on-surface-variant); }
+.empty .big { font-size:2.75rem; margin-bottom: var(--sp-2); }
+
+.child-grid { display:grid; grid-template-columns:1fr; gap: var(--sp-3); }
+
+.screen { display:none; min-height:100vh; }
+.screen.active { display:block; }
+.page-body { padding: var(--sp-4); padding-bottom:110px; width:100%; max-width:1024px; margin:0 auto; }
+.auth-page { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding: var(--sp-5); }
+.auth-card { width:100%; max-width:430px; }
+.logo {
+  width:76px; height:76px; border-radius:26px; background: var(--primary);
+  color: var(--on-primary); display:flex; align-items:center; justify-content:center;
+  margin:0 auto var(--sp-4); box-shadow: var(--elev-1);
+}
+.logo .icon { width:40px; height:40px; }
+
+.balance-hero {
+  border-radius: var(--r-xl); padding: var(--sp-5); margin-bottom: var(--sp-4);
+  background: var(--primary-container); color: var(--on-primary-container);
+}
+.balance-hero.child-accent { background: var(--secondary-container); color: var(--on-secondary-container); }
+.balance-hero .amount { font-size:2.6rem; font-weight:800; line-height:1.1; }
+.balance-hero .sub { font-size:.85rem; font-weight:700; opacity:.75; }
+
+.demo-bar {
+  position:fixed; bottom:0; right:0; z-index:200; background:#26312A; color:#cfd8cf;
+  font-size:.6875rem; padding:4px 8px; border-radius:8px 0 0 0; font-family:ui-monospace,monospace;
+}
+.demo-bar button { background:none; border:none; color:#9fd0a8; cursor:pointer; font:inherit; padding:0 4px; }
+
+.countdown { font-variant-numeric: tabular-nums; font-weight:800; }
+
+.settings-row { display:flex; align-items:center; gap:var(--sp-3); padding: var(--sp-3) 0; border-bottom:1px solid var(--outline-variant); }
+.settings-row:last-child { border-bottom:none; }
+
+.avatar {
+  width:48px; height:48px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:1.1rem;
+  background: var(--primary-container); color: var(--on-primary-container);
+}
+.avatar.child { background: var(--secondary-container); color: var(--on-secondary-container); }
+
+/* Dialogs */
+.overlay {
+  position:fixed; inset:0; background: rgba(38,49,42,.45); z-index:100;
+  display:none; align-items:flex-end; justify-content:center;
+}
+@media (min-width:768px) { .overlay { align-items:center; } }
+.overlay.open { display:flex; }
+.dialog {
+  background: var(--surface); border-radius: var(--r-xl) var(--r-xl) 0 0;
+  width:100%; max-width:560px; max-height:90vh; overflow-y:auto;
+  padding: var(--sp-5); position:relative;
+}
+@media (min-width:768px) { .dialog { border-radius: var(--r-xl); } }
+.dialog h2 { margin-bottom: var(--sp-3); }
+.dialog .actions { display:flex; gap:var(--sp-2); justify-content:flex-end; margin-top: var(--sp-4); flex-wrap:wrap; }
+.dialog .modal-close { position:absolute; top:var(--sp-2); right:var(--sp-2); }
+
+/* ==========================================================================
+   RESPONSIVE — single breakpoint 768px
+   ========================================================================== */
+.layout { display:flex; }
+.main-col { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; }
+.main-col > * { width:100%; max-width:1024px; }
+@media (min-width:768px) {
+  .bottomnav { display:none; }
+  .navrail {
+    display:flex; flex-direction:column; gap:var(--sp-2); padding: var(--sp-4) var(--sp-3);
+    width:88px; flex-shrink:0; position:sticky; top:0; height:100vh;
+  }
+  .navrail button {
+    border:none; background:none; cursor:pointer; display:flex; flex-direction:column;
+    align-items:center; gap:4px; font:800 .72rem "Nunito", sans-serif; color: var(--on-surface-variant);
+  }
+  .navrail button.active { color: var(--on-primary-container); }
+  .navrail button.active .ico { background: var(--primary-container); color: var(--on-primary-container); }
+  .child-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .page-body { padding-bottom: var(--sp-7); }
+}
+</style>
+</head>
+<body>
+
+<!-- Material icon sprite (parent surfaces use icons; playful emoji kept for child surfaces) -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></symbol>
+  <symbol id="i-child" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></symbol>
+  <symbol id="i-parents" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z"/></symbol>
+  <symbol id="i-add" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></symbol>
+  <symbol id="i-person-add" viewBox="0 0 24 24"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+  <symbol id="i-currency" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></symbol>
+  <symbol id="i-timeline" viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></symbol>
+  <symbol id="i-plus-minus" viewBox="0 0 24 24"><path d="M4 6h8v2H4V6zm16 4v2h-8v-2h8zm-8 6h8v2h-8v-2zM5 12h6v2H5v-2z" transform="translate(0,-1)"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></symbol>
+  <symbol id="i-danger" viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></symbol>
+</svg>
+
+<!-- ================= LANDING ================= -->
+<section class="screen active" id="scr-landing">
+  <div class="auth-page">
+    <div class="auth-card center">
+      <div class="logo"><svg class="icon"><use href="#i-wallet"/></svg></div>
+      <h1>Pocket-Money</h1>
+      <p class="muted" style="margin:8px 0 40px">Virtual family allowance &amp; ledger</p>
+      <button class="btn btn-filled amber btn-block" style="margin-bottom:16px" onclick="goChildEntry()">I'm a Kid</button>
+      <button class="btn btn-outlined btn-block" onclick="show('scr-parent-login')">I'm a Parent</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CHILDREN HISTORY (chooser) ================= -->
+<section class="screen" id="scr-history">
+  <div class="auth-page">
+    <div class="auth-card">
+      <h2 class="center" style="margin-bottom:8px">Who's playing?</h2>
+      <p class="muted center" style="margin-bottom:32px">Pick your profile and enter your PIN</p>
+      <div id="history-list" style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px"></div>
+      <button class="btn btn-outlined btn-block" style="margin-bottom:12px" onclick="showChildLogin(null)">Log in as a new kid</button>
+      <button class="btn btn-text btn-block" onclick="confirmClearHistory()">Clear all profiles on this device</button>
+      <hr style="border:none;border-top:1px solid var(--outline-variant);margin:24px 0">
+      <button class="btn btn-filled btn-block" onclick="parentLoginFlow()">I'm a Parent</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CHILD LOGIN ================= -->
+<section class="screen" id="scr-child-login">
+  <div class="auth-page">
+    <div class="auth-card">
+      <button class="icon-btn" style="margin-bottom:8px" onclick="backFromChildLogin()"><svg class="icon"><use href="#i-back"/></svg></button>
+      <h2 id="cl-title">Kid login</h2>
+      <div id="cl-account-form" style="margin-top:24px">
+        <div class="field">
+          <label>Pocket-Money Account ID</label>
+          <div class="aid-row" id="aid-row">
+            <input maxlength="1" data-i="0"><input maxlength="1" data-i="1"><input maxlength="1" data-i="2"><input maxlength="1" data-i="3"><input maxlength="1" data-i="4">
+          </div>
+          <span class="hint">The 5-character ID your parents gave you.</span>
+        </div>
+      </div>
+      <div id="cl-pin-area"></div>
+      <div class="alert alert-error" id="cl-alert"><span class="pd-title"></span><span class="pd-detail"></span><span class="pd-foot"></span></div>
+      <div class="alert alert-warn" id="cl-lock-alert">
+        <span class="pd-title"></span>
+        <span class="pd-detail"></span>
+        <span class="pd-foot"></span>
+        <div style="margin-top:12px"><span class="countdown" id="cl-countdown"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PARENT LOGIN ================= -->
+<section class="screen" id="scr-parent-login">
+  <div class="auth-page">
+    <div class="auth-card center">
+      <div class="logo"><svg class="icon"><use href="#i-wallet"/></svg></div>
+      <h2>Parent sign-in</h2>
+      <p class="muted" style="margin:8px 0 32px">Authentication via Firebase</p>
+      <button class="btn btn-outlined btn-block" style="margin-bottom:12px" onclick="parentSignIn('tohid')">Continue as <b>&nbsp;Tohid</b></button>
+      <button class="btn btn-outlined btn-block" style="margin-bottom:12px" onclick="parentSignIn('moj')">Continue as <b>&nbsp;Moj</b></button>
+      <button class="btn btn-text btn-block" onclick="parentSignIn('fresh')">Simulate: brand-new parent (auto-creates household)</button>
+      <p class="muted small" style="margin-top:24px">Mock Firebase buttons — the real app uses Firebase Auth here.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ONBOARDING — settings ================= -->
+<section class="screen" id="scr-onboard-settings">
+  <div class="auth-page">
+    <div class="auth-card">
+      <h2>Set up your household</h2>
+      <p class="muted" style="margin:8px 0 24px">Step 1 of 2 — your household settings</p>
+      <div class="field">
+        <label for="ob-name">Household display name</label>
+        <input id="ob-name" maxlength="50" placeholder="The Smith Family">
+      </div>
+      <div class="field">
+        <label for="ob-currency">Default currency for new children</label>
+        <select id="ob-currency"></select>
+        <span class="hint">New child profiles inherit this; each child's currency can be changed later.</span>
+      </div>
+      <button class="btn btn-filled btn-block" onclick="onboardSettingsDone()">Continue</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ONBOARDING — Parent Lock PIN ================= -->
+<section class="screen" id="scr-onboard-pin">
+  <div class="auth-page">
+    <div class="auth-card center">
+      <h2 id="obp-title">Create your Parent Lock PIN</h2>
+      <p class="muted" id="obp-sub" style="margin:8px 0 8px"></p>
+      <div id="obp-pin-area"></div>
+      <button class="btn btn-filled btn-block" id="obp-done" style="margin-top:16px" disabled onclick="onboardPinDone()">Set PIN</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PARENT DASHBOARD ================= -->
+<section class="screen" id="scr-parent-home">
+  <div class="layout">
+    <nav class="navrail">
+      <button class="active" onclick="goParentTab('children')"><span class="ico"><svg class="icon"><use href="#i-child"/></svg></span>Kids</button>
+      <button onclick="goParentTab('settings')"><span class="ico"><svg class="icon"><use href="#i-settings"/></svg></span>Settings</button>
+      <button onclick="logout()"><span class="ico"><svg class="icon"><use href="#i-logout"/></svg></span>Log out</button>
+      <div class="grow"></div>
+      <div class="idle-chip" id="idle-chip-rail"><svg class="icon s18"><use href="#i-lock"/></svg><span class="countdown" id="idle-cd-rail"></span></div>
+    </nav>
+    <div class="main-col">
+      <header class="appbar">
+        <div class="titles">
+          <div class="t1" id="ph-household-name">Household</div>
+          <div class="t2" id="ph-user-name"></div>
+        </div>
+        <span class="grow"></span>
+        <div class="idle-chip" id="idle-chip-bar"><svg class="icon s18"><use href="#i-lock"/></svg><span class="countdown" id="idle-cd-bar"></span></div>
+      </header>
+      <div class="page-body">
+        <!-- children tab -->
+        <div id="ph-tab-children">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <h3 class="grow">Children</h3>
+            <button class="btn btn-tonal" id="ph-invite-btn" onclick="openDialog('dlg-invite')"><svg class="icon s18"><use href="#i-person-add"/></svg> Invite another parent</button>
+          </div>
+          <div class="alert alert-info" id="ph-invite-pending">
+            <span class="pd-title">Invitation pending</span>
+            <span class="pd-detail" id="ph-invite-pending-detail"></span>
+            <div style="display:flex;justify-content:flex-end;margin-top:10px">
+              <button class="btn btn-danger-tonal" onclick="cancelInvitation()">Cancel invitation</button>
+            </div>
+          </div>
+          <div id="ph-children"></div>
+          <div class="alert alert-info" id="ph-second-parent-note" style="display:none">
+            <span class="pd-title">Note for second parent</span>
+            <span class="pd-detail">Household deletion is owner-only — you are not the household owner.</span>
+          </div>
+        </div>
+        <!-- settings tab -->
+        <div id="ph-tab-settings" style="display:none">
+          <h3 style="margin-bottom:16px">Household settings</h3>
+          <div class="card-elev" style="padding:16px;margin-bottom:16px">
+            <div class="settings-row">
+              <div class="grow">
+                <div class="small muted">Display name</div>
+                <div id="ph-set-name" style="font-weight:700">—</div>
+              </div>
+              <button class="btn btn-text" onclick="openDialog('dlg-settings')">Edit</button>
+            </div>
+            <div class="settings-row">
+              <div class="grow">
+                <div class="small muted">Default currency (new children)</div>
+                <div id="ph-set-currency" style="font-weight:700">—</div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="grow">
+                <div class="small muted">Parents</div>
+                <div id="ph-set-parents" style="font-weight:700">—</div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="grow">
+                <div class="small muted">Parent Lock PIN (idle-unlock, UI Spec §4)</div>
+                <div style="font-weight:700">••••</div>
+              </div>
+              <button class="btn btn-text" onclick="openDialog('dlg-parent-pin')">Change</button>
+            </div>
+          </div>
+          <h3 style="margin-bottom:16px">Danger zone</h3>
+          <div class="card-elev" style="padding:16px">
+            <div class="settings-row">
+              <div class="grow">
+                <div style="font-weight:800">Delete household</div>
+                <div class="small muted">Permanently removes the household, all children and the ledger. Owner only.</div>
+              </div>
+              <button class="btn btn-danger-tonal" id="ph-delete-btn" onclick="openDialog('dlg-delete-household')">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="bottomnav">
+    <button class="active" onclick="goParentTab('children')"><span class="ico"><svg class="icon"><use href="#i-child"/></svg></span>Kids</button>
+    <button onclick="goParentTab('settings')"><span class="ico"><svg class="icon"><use href="#i-settings"/></svg></span>Settings</button>
+    <button onclick="logout()"><span class="ico"><svg class="icon"><use href="#i-logout"/></svg></span>Log out</button>
+  </nav>
+</section>
+
+<!-- ================= CHILD DRILL-DOWN ================= -->
+<section class="screen" id="scr-child-detail">
+  <header class="appbar">
+    <button class="icon-btn" onclick="show('scr-parent-home'); renderParentHome()"><svg class="icon"><use href="#i-back"/></svg></button>
+    <div class="titles">
+      <div class="t1" id="cd-name">Child</div>
+      <div class="t2" id="cd-account"></div>
+    </div>
+    <span class="grow"></span>
+    <span id="cd-lock-chip"></span>
+  </header>
+  <div class="page-body">
+    <div class="balance-hero">
+      <div class="sub">Current balance</div>
+      <div class="amount" id="cd-balance">0</div>
+      <div class="sub" id="cd-currency-line"></div>
+    </div>
+    <div class="alert alert-warn" id="cd-lock-alert">
+      <span class="pd-title" id="cd-lock-title"></span>
+      <span class="pd-detail" id="cd-lock-detail"></span>
+      <span class="pd-foot">(error: account_locked, status: 423)</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 24px">
+      <button class="btn btn-outlined" onclick="openDialog('dlg-currency')"><svg class="icon s18"><use href="#i-currency"/></svg> Currency</button>
+      <button class="btn btn-outlined" onclick="openDialog('dlg-child-pin')"><svg class="icon s18"><use href="#i-key"/></svg> PIN</button>
+      <button class="btn btn-outlined" id="cd-lock-btn" onclick="toggleLock()"><svg class="icon s18"><use href="#i-lock"/></svg> Lock</button>
+    </div>
+    <h3 style="margin-bottom:12px">Timeline</h3>
+    <div class="tx-list" id="cd-timeline"></div>
+  </div>
+  <!-- sub-page bottom nav: back button at the start for thumb reach -->
+  <nav class="bottomnav" id="cd-bottomnav">
+    <button onclick="show('scr-parent-home'); renderParentHome()"><span class="ico"><svg class="icon"><use href="#i-back"/></svg></span>Back</button>
+  </nav>
+</section>
+
+<!-- ================= CHILD DASHBOARD ================= -->
+<section class="screen" id="scr-child-home">
+  <header class="appbar">
+    <div class="titles"><div class="t1" id="ch-name">Hi!</div><div class="t2">My Pocket-Money</div></div>
+    <span class="grow"></span>
+    <button class="btn btn-text" onclick="childLogout()"><svg class="icon s18"><use href="#i-logout"/></svg> Log out</button>
+  </header>
+  <div class="page-body">
+    <div class="balance-hero child-accent">
+      <div class="sub">My balance 🎈</div>
+      <div class="amount" id="ch-balance">0</div>
+      <div class="sub" id="ch-currency-line"></div>
+    </div>
+    <h3 style="margin-bottom:12px">My history</h3>
+    <div class="tx-list" id="ch-timeline"></div>
+  </div>
+</section>
+
+<!-- ================= IP BANNED ================= -->
+<section class="screen" id="scr-ip-banned">
+  <div class="auth-page">
+    <div class="auth-card center">
+      <div class="logo" style="background:var(--error-container);color:var(--on-error-container)"><svg class="icon"><use href="#i-danger"/></svg></div>
+      <h2>Access restricted</h2>
+      <div class="alert alert-error open" style="text-align:left;margin-top:24px">
+        <span class="pd-title" id="ib-title">IP address banned</span>
+        <span class="pd-detail" id="ib-detail"></span>
+        <span class="pd-foot">(error: ip_banned, status: 403)</span>
+      </div>
+      <p class="muted small">Too many failed child logins were detected from this network address. The ban applies app-wide; static pages remain reachable.</p>
+      <button class="btn btn-outlined btn-block" style="margin-top:24px" onclick="location.reload()">Back to home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DIALOGS ================= -->
+<!-- Log transaction -->
+<div class="overlay" id="dlg-tx"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-tx')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Log transaction</h2>
+  <p class="muted" id="tx-child-line" style="margin-bottom:16px"></p>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="btn btn-filled grow" id="tx-credit-btn" onclick="setTxType('CREDIT')">Credit</button>
+    <button class="btn btn-outlined grow" id="tx-debit-btn" onclick="setTxType('DEBIT')">Debit</button>
+  </div>
+  <div class="field">
+    <label for="tx-amount">Amount</label>
+    <input id="tx-amount" type="number" min="0" step="0.01" placeholder="5.00">
+    <span class="hint" id="tx-scale-hint"></span>
+  </div>
+  <div class="field">
+    <label for="tx-reason">Reason</label>
+    <input id="tx-reason" maxlength="255" placeholder="Mowed lawn">
+    <span class="hint">Emoji outside the family-friendly list are stripped (v1, UI Spec §8).</span>
+    <span class="err" id="tx-reason-err">Reason is required (1–255 characters).</span>
+  </div>
+  <div class="alert alert-error" id="tx-alert"><span class="pd-title"></span><span class="pd-detail"></span><span class="pd-foot"></span></div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-tx')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitTx()">Save</button>
+  </div>
+</div></div>
+
+<!-- Change currency -->
+<div class="overlay" id="dlg-currency"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-currency')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Change currency</h2>
+  <div class="field">
+    <label for="cur-select">New currency</label>
+    <select id="cur-select"></select>
+  </div>
+  <div class="alert alert-warn open">
+    <span class="pd-title">Balance carries over numerically</span>
+    <span class="pd-detail" id="cur-warn-detail"></span>
+  </div>
+  <p class="muted small">Past transactions keep the currency they were recorded in (immutable ledger, FR-P6).</p>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-currency')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitCurrency()">Change currency</button>
+  </div>
+</div></div>
+
+<!-- Change child PIN -->
+<div class="overlay" id="dlg-child-pin"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-child-pin')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Set new PIN</h2>
+  <p class="muted" style="margin-bottom:16px">Rotates the child's security stamp — their current sessions are signed out.</p>
+  <div class="alert alert-warn open" id="pin-lock-warn">
+    <span class="pd-title">Account is locked</span>
+    <span class="pd-detail">The PIN cannot be changed while the account is locked. Unlock it first — unlocking does not require changing the PIN.</span>
+    <span class="pd-foot">(error: account_locked, status: 423)</span>
+  </div>
+  <div id="pin-form-area">
+    <div class="field">
+      <label for="cp-new">New 4-digit PIN</label>
+      <input id="cp-new" type="password" inputmode="numeric" maxlength="4">
+    </div>
+  </div>
+  <div class="alert alert-error" id="cp-alert"><span class="pd-title"></span><span class="pd-detail"></span><span class="pd-foot"></span></div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-child-pin')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitChildPin()">Save PIN</button>
+  </div>
+</div></div>
+
+<!-- Add child -->
+<div class="overlay" id="dlg-addchild"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-addchild')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>New child profile</h2>
+  <div class="field">
+    <label for="ac-name">Display name</label>
+    <input id="ac-name" maxlength="100" placeholder="Emma">
+  </div>
+  <p class="muted small" style="margin-bottom:16px">Inherits the household default currency. A Pocket-Money Account ID and an initial PIN are generated automatically.</p>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-addchild')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitAddChild()">Create</button>
+  </div>
+</div></div>
+
+<!-- initialPin revealed once -->
+<div class="overlay" id="dlg-pin-reveal"><div class="dialog center">
+  <h2>Profile created 🎉</h2>
+  <p class="muted" style="margin:8px 0 16px">Save these credentials now — the initial PIN is <b>never shown again</b>.</p>
+  <div class="card-elev" style="padding:24px;margin-bottom:16px">
+    <div class="small muted">Pocket-Money Account ID</div>
+    <div style="font-size:2rem;letter-spacing:6px;font-weight:800" id="pr-account">—</div>
+    <div class="small muted" style="margin-top:16px">Initial PIN</div>
+    <div style="font-size:2rem;letter-spacing:6px;font-weight:800" id="pr-pin">—</div>
+  </div>
+  <div class="actions" style="justify-content:center">
+    <button class="btn btn-filled" onclick="closeDialog('dlg-pin-reveal')">I've saved them</button>
+  </div>
+</div></div>
+
+<!-- Invite parent -->
+<div class="overlay" id="dlg-invite"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-invite')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Invite another parent</h2>
+  <div class="field">
+    <label for="inv-email">Email</label>
+    <input id="inv-email" type="email" placeholder="parent@example.com">
+  </div>
+  <p class="muted small">An invitation email is sent via SendGrid. It expires in 7 days and only one invitation can be pending at a time.</p>
+  <div class="alert alert-error" id="inv-alert"><span class="pd-title"></span><span class="pd-detail"></span><span class="pd-foot"></span></div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-invite')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitInvite()">Send invitation</button>
+  </div>
+</div></div>
+
+<!-- Household settings edit -->
+<div class="overlay" id="dlg-settings"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-settings')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Household settings</h2>
+  <div class="field">
+    <label for="hs-name">Display name</label>
+    <input id="hs-name" maxlength="50" placeholder="The Smith Family">
+  </div>
+  <div class="field">
+    <label for="hs-currency">Default currency (new children)</label>
+    <select id="hs-currency"></select>
+  </div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-settings')">Cancel</button>
+    <button class="btn btn-filled" onclick="submitSettings()">Save</button>
+  </div>
+</div></div>
+
+<!-- Parent PIN change -->
+<div class="overlay" id="dlg-parent-pin"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-parent-pin')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Change Parent Lock PIN</h2>
+  <div class="field">
+    <label for="pp-current">Current PIN</label>
+    <input id="pp-current" type="password" inputmode="numeric" maxlength="4">
+    <span class="hint">Required because you already have a PIN (hasPin = true).</span>
+  </div>
+  <div class="field">
+    <label for="pp-new">New PIN</label>
+    <input id="pp-new" type="password" inputmode="numeric" maxlength="4">
+  </div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-parent-pin')">Cancel</button>
+    <button class="btn btn-filled" onclick="closeDialog('dlg-parent-pin'); toast('PIN updated (mock)')">Save</button>
+  </div>
+</div></div>
+
+<!-- Delete household -->
+<div class="overlay" id="dlg-delete-household"><div class="dialog">
+  <button class="icon-btn modal-close" onclick="closeDialog('dlg-delete-household')"><svg class="icon"><use href="#i-close"/></svg></button>
+  <h2>Delete household?</h2>
+  <p style="margin-bottom:16px">This permanently deletes <b id="dh-name"></b>, all children and the entire ledger. This cannot be undone.</p>
+  <div class="alert alert-error open">
+    <span class="pd-title">Owner only</span>
+    <span class="pd-detail">Only the household owner (earliest Parent.CreatedAt) can delete it.</span>
+    <span class="pd-foot">(error: owner_only, status: 403)</span>
+  </div>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-delete-household')">Cancel</button>
+    <button class="btn btn-danger" onclick="toast('Household deleted (mock) — logged as HouseholdDeleted'); closeDialog('dlg-delete-household')">Delete forever</button>
+  </div>
+</div></div>
+
+<!-- Parent idle-unlock modal -->
+<div class="overlay" id="dlg-idle-lock"><div class="dialog center">
+  <div class="logo"><svg class="icon"><use href="#i-lock"/></svg></div>
+  <h2>Session locked</h2>
+  <p class="muted" style="margin:8px 0 8px">5 minutes of inactivity — enter your Parent Lock PIN to continue.</p>
+  <div id="idle-pin-area"></div>
+  <div class="alert alert-error" id="idle-alert"><span class="pd-title"></span><span class="pd-detail"></span><span class="pd-foot"></span></div>
+</div></div>
+
+<!-- Clear history confirm -->
+<div class="overlay" id="dlg-clear-history"><div class="dialog">
+  <h2>Clear all profiles?</h2>
+  <p style="margin:12px 0 16px">This only removes the profile list stored on <b>this device</b>. The accounts themselves are not affected.</p>
+  <div class="actions">
+    <button class="btn btn-text" onclick="closeDialog('dlg-clear-history')">Cancel</button>
+    <button class="btn btn-danger-tonal" onclick="clearHistoryConfirmed()">Clear list</button>
+  </div>
+</div></div>
+
+<!-- Demo toolbar -->
+<div class="demo-bar">
+  DEMO:
+  <button onclick="demoIdleLock()">idle-lock now</button>
+  <button onclick="demoIpBan()">ip-ban</button>
+  <button onclick="demoReset()">reset data</button>
+</div>
+
+<script>
+/* ==========================================================================
+   MOCK DATA — mirrors API Spec v0.1 payload shapes
+   ========================================================================== */
+const CURRENCIES = [
+  { key: 'POINT', symbol: '⭐', country: '—', title: 'Points', decimalDigits: 0 },
+  { key: 'USD', symbol: '$', country: 'US', title: 'US Dollar', decimalDigits: 2 },
+  { key: 'EUR', symbol: '€', country: 'EU', title: 'Euro', decimalDigits: 2 },
+  { key: 'GBP', symbol: '£', country: 'GB', title: 'British Pound', decimalDigits: 2 },
+  { key: 'IRR', symbol: '﷼', country: 'IR', title: 'Iranian Rial', decimalDigits: 0 },
+];
+
+function seedData() {
+  const now = Date.now();
+  return {
+    household: {
+      id: 'h1', displayName: 'The Smith Family', defaultCurrencyKey: 'POINT',
+      parents: [
+        { id: 'p-tohid', displayName: 'Tohid', isOwner: true, hasPin: true },
+        { id: 'p-moj', displayName: 'Moj', isOwner: false, hasPin: true },
+      ],
+      pendingInvitation: null,
+    },
+    children: [
+      { id: 'c1', accountId: 'MJ74K', displayName: 'Mia', currencyKey: 'USD', currentBalance: 87.5, locked: false, lockedUntil: null, pin: '1234', attempts: 0 },
+      { id: 'c2', accountId: 'LX2B9', displayName: 'Leo', currencyKey: 'POINT', currentBalance: 240, locked: true, lockedUntil: now + 4 * 60 * 1000, pin: '1234', attempts: 3 },
+      { id: 'c3', accountId: 'KT8RN', displayName: 'Zoe', currencyKey: 'EUR', currentBalance: 12.25, locked: true, lockedUntil: 'MAX', pin: '1234', attempts: 9 },
+    ],
+    transactions: [
+      { id: 't1', childId: 'c1', type: 'CREDIT', currencyKey: 'USD', amount: 50.0, reason: 'Weekly allowance 🎉', remainingAfter: 87.5, createdAt: now - 86400000 * 1 },
+      { id: 't2', childId: 'c1', type: 'DEBIT', currencyKey: 'USD', amount: 12.5, reason: 'Bought a book 📚', remainingAfter: 37.5, createdAt: now - 86400000 * 3 },
+      { id: 't3', childId: 'c1', type: 'CREDIT', currencyKey: 'USD', amount: 25.0, reason: 'Mowed lawn', remainingAfter: 50.0, createdAt: now - 86400000 * 4 },
+      { id: 't4', childId: 'c1', type: 'CREDIT', currencyKey: 'USD', amount: 25.0, reason: 'Birthday gift 🎁', remainingAfter: 25.0, createdAt: now - 86400000 * 9 },
+      { id: 't5', childId: 'c2', type: 'CREDIT', currencyKey: 'POINT', amount: 100, reason: 'Homework done ✏️', remainingAfter: 240, createdAt: now - 86400000 * 2 },
+      { id: 't6', childId: 'c3', type: 'CREDIT', currencyKey: 'EUR', amount: 12.25, reason: 'Chores 🧹', remainingAfter: 12.25, createdAt: now - 86400000 * 5 },
+    ],
+  };
+}
+
+let DB = null;
+const LS_DATA = 'pm_demo_data', LS_HISTORY = 'pm_children_history', LS_SESSION = 'pm_session';
+function loadDB() { try { const r = localStorage.getItem(LS_DATA); if (r) return JSON.parse(r); } catch (e) {} const f = seedData(); saveDB(f); return f; }
+function saveDB(db) { DB = db; localStorage.setItem(LS_DATA, JSON.stringify(db)); }
+function getHistory() { try { return JSON.parse(localStorage.getItem(LS_HISTORY) || '{}'); } catch (e) { return {}; } }
+function saveHistory(h) { localStorage.setItem(LS_HISTORY, JSON.stringify(h)); }
+function getSession() { try { return JSON.parse(localStorage.getItem(LS_SESSION) || 'null'); } catch (e) { return null; } }
+function setSession(s) { s ? localStorage.setItem(LS_SESSION, JSON.stringify(s)) : localStorage.removeItem(LS_SESSION); }
+const PARENT_PIN = '1234';
+
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
+const $ = id => document.getElementById(id);
+function show(scrId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(scrId).classList.add('active');
+  window.scrollTo(0, 0);
+}
+function openDialog(id) { $(id).classList.add('open'); }
+function closeDialog(id) { $(id).classList.remove('open'); }
+function cur(key) { return CURRENCIES.find(c => c.key === key) || CURRENCIES[0]; }
+function fmt(amount, currencyKey) { const c = cur(currencyKey); return c.symbol + Number(amount).toFixed(c.decimalDigits); }
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+function fillProblemDetails(el, pd) {
+  el.querySelector('.pd-title').textContent = pd.title;
+  const det = el.querySelector('.pd-detail'); if (det) det.textContent = pd.detail || '';
+  const foot = el.querySelector('.pd-foot'); if (foot) foot.textContent = `(error: ${pd.code}, status: ${pd.status})`;
+  el.classList.add('open');
+}
+function hideAlert(el) { el.classList.remove('open'); }
+function toast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#26312A;color:#F4F1E7;padding:12px 24px;border-radius:100px;z-index:300;font:700 .875rem Nunito,sans-serif;box-shadow:var(--elev-2)';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+}
+function stripEmoji(s) {
+  const wl = '😀😄😁😆🙂😉😊😍🥰😘😜😎🤩🥳😅😂🤣☺👍👏🙌👋🤝💪🙏❤🧡💛💚💙💜🤍🎉🎊🎁🎈⭐✨🏆🥇🏅💰💵💶💷💸🪙🌈☀🌸🌻🌳🌙🐶🐱🐰🐼🦄🐢🦋🐝🍎🍌🍪🧁🎂🍕🍦🍿⚽🚲🎨🎮📚✏🧩⏰';
+  return [...s].filter(ch => ch.codePointAt(0) < 0x1F000 || wl.includes(ch)).join('');
+}
+function isLocked(c) {
+  if (!c.locked) return false;
+  if (c.lockedUntil === 'MAX') return true;
+  return Date.now() < c.lockedUntil;
+}
+function mmss(ms) { const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000); return `${m}:${String(s).padStart(2, '0')}`; }
+const ICON = n => `<svg class="icon s18"><use href="#${n}"/></svg>`;
+
+/* ==========================================================================
+   ROUTING / ENTRY
+   ========================================================================== */
+function goChildEntry() {
+  const s = getSession();
+  if (s && s.type === 'child') { const c = DB.children.find(x => x.id === s.childId); if (c) return openChildHome(c); }
+  Object.keys(getHistory()).length > 0 ? renderHistory() : showChildLogin(null);
+}
+function backFromChildLogin() {
+  Object.keys(getHistory()).length > 0 ? show('scr-history') : show('scr-landing');
+}
+
+/* ==========================================================================
+   CHILDREN HISTORY PAGE
+   ========================================================================== */
+function renderHistory() {
+  show('scr-history');
+  const hist = getHistory();
+  const list = $('history-list'); list.innerHTML = '';
+  const entries = Object.entries(hist);
+  if (entries.length === 0) { show('scr-landing'); return; }
+  entries.forEach(([accountId, name]) => {
+    const row = document.createElement('div');
+    row.className = 'card clickable';
+    row.style.cssText = 'display:flex;align-items:center;gap:12px';
+    row.innerHTML = `
+      <div class="avatar child">${name.slice(0, 1).toUpperCase()}</div>
+      <div class="grow">
+        <div style="font-weight:800">${name}</div>
+        <div class="small muted">${accountId}</div>
+      </div>
+      <button class="icon-btn" title="Remove from this device" data-del="${accountId}">${ICON('i-close')}</button>`;
+    row.querySelector('[data-del]').onclick = (e) => {
+      e.stopPropagation();
+      const h = getHistory(); delete h[accountId]; saveHistory(h); renderHistory();
+      toast('Removed from this device (account unaffected)');
+    };
+    row.onclick = () => showChildLogin(accountId);
+    list.appendChild(row);
+  });
+}
+function confirmClearHistory() {
+  if (Object.keys(getHistory()).length === 0) { toast('List is already empty'); return; }
+  openDialog('dlg-clear-history');
+}
+function clearHistoryConfirmed() {
+  saveHistory({}); closeDialog('dlg-clear-history');
+  toast('Profile list cleared'); show('scr-landing');
+}
+
+/* ==========================================================================
+   CHILD LOGIN — lock state unknown until API answers 423 (UI Spec §3.1)
+   ========================================================================== */
+let clAccount = null, clPinBuffer = '', clCountdownTimer = null;
+
+function showChildLogin(accountId) {
+  show('scr-child-login');
+  hideAlert($('cl-alert')); hideAlert($('cl-lock-alert'));
+  clearInterval(clCountdownTimer);
+  clPinBuffer = '';
+  initAidInputs();
+  if (accountId) {
+    clAccount = DB.children.find(c => c.accountId === accountId);
+    $('cl-title').textContent = `Hi ${clAccount.displayName}! Enter your PIN`;
+    $('cl-account-form').style.display = 'none';
+  } else {
+    clAccount = null;
+    $('cl-title').textContent = 'Kid login';
+    $('cl-account-form').style.display = 'block';
+  }
+  renderPinArea();
+}
+/* 5-box Account ID input */
+function initAidInputs() {
+  const inputs = [...$('aid-row').querySelectorAll('input')];
+  inputs.forEach(inp => { inp.value = ''; });
+  inputs.forEach((inp, i) => {
+    inp.oninput = () => {
+      inp.value = inp.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(-1);
+      if (inp.value && i < 4) inputs[i + 1].focus();
+    };
+    inp.onkeydown = (e) => {
+      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus();
+    };
+  });
+}
+function aidValue() {
+  return [...$('aid-row').querySelectorAll('input')].map(i => i.value).join('');
+}
+function renderPinArea() {
+  $('cl-pin-area').innerHTML = `
+    <div class="pin-dots">${[0,1,2,3].map(i => `<span class="${i < clPinBuffer.length ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="pin-pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n => `<button onclick="pinKey('${n}')">${n}</button>`).join('')}
+      <button class="util" onclick="clPinBuffer='';renderPinArea()">Clear</button>
+      <button onclick="pinKey('0')">0</button>
+      <button class="util" onclick="clPinBuffer=clPinBuffer.slice(0,-1);renderPinArea()">⌫</button>
+    </div>`;
+}
+function pinKey(k) {
+  if (clPinBuffer.length >= 4) return;
+  clPinBuffer += k; renderPinArea();
+  if (clPinBuffer.length === 4) setTimeout(childLoginSubmit, 150);
+}
+function childLoginSubmit() {
+  const pin = clPinBuffer;
+  let child = clAccount;
+  if (!child) {
+    const aid = aidValue().trim().toUpperCase();
+    child = DB.children.find(c => c.accountId === aid);
+    if (!child || aid.length !== 5) {
+      fillProblemDetails($('cl-alert'), { title: 'Invalid credentials', detail: 'Check the Account ID and PIN.', code: 'invalid_credentials', status: 401 });
+      clPinBuffer = ''; renderPinArea(); return;
+    }
+  }
+  if (isLocked(child)) { renderLockState(child); return; }
+  if (child.pin !== pin) {
+    child.attempts++;
+    if (child.attempts === 3) { child.locked = true; child.lockedUntil = Date.now() + 5 * 60000; }
+    else if (child.attempts === 6) { child.locked = true; child.lockedUntil = Date.now() + 15 * 60000; }
+    else if (child.attempts >= 9) { child.locked = true; child.lockedUntil = 'MAX'; }
+    saveDB(DB);
+    if (child.locked) { renderLockState(child); return; }
+    fillProblemDetails($('cl-alert'), { title: 'Invalid credentials', detail: `Wrong PIN. ${3 - (child.attempts % 3)} attempt(s) left before lockout.`, code: 'invalid_credentials', status: 401 });
+    clPinBuffer = ''; renderPinArea(); return;
+  }
+  child.attempts = 0; saveDB(DB);
+  const h = getHistory(); h[child.accountId] = child.displayName; saveHistory(h);
+  setSession({ type: 'child', childId: child.id });
+  openChildHome(child);
+}
+function renderLockState(child) {
+  $('cl-pin-area').innerHTML = '';
+  hideAlert($('cl-alert'));
+  const warn = $('cl-lock-alert');
+  warn.querySelector('.pd-title').textContent = child.lockedUntil === 'MAX' ? 'Account permanently locked' : 'Account locked';
+  warn.querySelector('.pd-detail').textContent = child.lockedUntil === 'MAX'
+    ? 'A parent must unlock this account from the Parent Dashboard.'
+    : 'Too many failed attempts. Try again when the countdown ends.';
+  warn.querySelector('.pd-foot').textContent = child.lockedUntil === 'MAX'
+    ? '(error: account_permanently_locked, status: 423)' : '(error: account_locked, status: 423)';
+  warn.classList.add('open');
+  clearInterval(clCountdownTimer);
+  if (child.lockedUntil !== 'MAX') {
+    const tick = () => {
+      const ms = child.lockedUntil - Date.now();
+      if (ms <= 0) {
+        clearInterval(clCountdownTimer);
+        child.locked = false; child.lockedUntil = null; saveDB(DB);
+        warn.classList.remove('open'); renderPinArea(); toast('Lock expired — try again');
+        return;
+      }
+      $('cl-countdown').textContent = 'Unlocks in ' + mmss(ms);
+    };
+    tick(); clCountdownTimer = setInterval(tick, 1000);
+  } else { $('cl-countdown').textContent = ''; }
+  clPinBuffer = '';
+}
+
+/* ==========================================================================
+   CHILD DASHBOARD
+   ========================================================================== */
+let chChild = null;
+function openChildHome(child) {
+  chChild = child;
+  show('scr-child-home');
+  $('ch-name').textContent = `Hi ${child.displayName}!`;
+  const c = cur(child.currencyKey);
+  $('ch-balance').textContent = fmt(child.currentBalance, child.currencyKey);
+  $('ch-currency-line').textContent = `${c.title} (${c.key})`;
+  renderTimeline($('ch-timeline'), DB.transactions.filter(t => t.childId === child.id));
+}
+function childLogout() { setSession(null); show('scr-landing'); }
+
+function renderTimeline(el, txs) {
+  el.innerHTML = '';
+  if (txs.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="big">🍃</div><div style="font-weight:700">No transactions yet</div><div class="small muted" style="margin-top:4px">New entries appear here, newest first.</div></div>`;
+    return;
+  }
+  [...txs].sort((a, b) => b.createdAt - a.createdAt).forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'tx-row';
+    row.innerHTML = `
+      <div class="tx-ico ${t.type.toLowerCase()}">${t.type === 'CREDIT' ? ICON('i-add') : '−'}</div>
+      <div class="grow" style="min-width:0">
+        <div style="font-weight:700">${t.reason}</div>
+        <span class="tx-meta">${fmtDate(t.createdAt)}</span>
+        <span class="tx-meta">Balance after: ${fmt(t.remainingAfter, t.currencyKey)}</span>
+      </div>
+      <div class="tx-amount ${t.type.toLowerCase()}">${t.type === 'CREDIT' ? '+' : '−'}${fmt(t.amount, t.currencyKey)}</div>`;
+    el.appendChild(row);
+  });
+}
+
+/* ==========================================================================
+   PARENT LOGIN + ONBOARDING
+   ========================================================================== */
+let parentUser = null;
+function parentLoginFlow() { show('scr-parent-login'); }
+function parentSignIn(who) {
+  setSession(null);
+  if (who === 'fresh') {
+    parentUser = { id: 'p-fresh', displayName: 'New Parent', isOwner: true, hasPin: false, fresh: true };
+    fillCurrencySelect($('ob-currency'), DB.household.defaultCurrencyKey);
+    $('ob-name').value = '';
+    show('scr-onboard-settings');
+    return;
+  }
+  parentUser = DB.household.parents.find(p => p.id === 'p-' + who);
+  if (!parentUser.hasPin) { setupOnboardPin(false); show('scr-onboard-pin'); return; }
+  enterParentHome();
+}
+function fillCurrencySelect(sel, selected) {
+  sel.innerHTML = CURRENCIES.map(c => `<option value="${c.key}" ${c.key === selected ? 'selected' : ''}>${c.title} (${c.key})</option>`).join('');
+}
+function onboardSettingsDone() {
+  const name = $('ob-name').value.trim();
+  if (!name) { toast('Household name is required'); return; }
+  DB.household.displayName = name;
+  DB.household.defaultCurrencyKey = $('ob-currency').value;
+  saveDB(DB);
+  setupOnboardPin(true);
+  show('scr-onboard-pin');
+}
+let obpPin = '';
+function setupOnboardPin(isFirst) {
+  $('obp-title').textContent = 'Create your Parent Lock PIN';
+  $('obp-sub').textContent = isFirst
+    ? 'Step 2 of 2 — unlocks your session after 5 minutes of inactivity'
+    : 'One last step — unlocks your session after 5 minutes of inactivity';
+  $('obp-done').disabled = true;
+  obpPin = '';
+  renderObpPin();
+}
+function renderObpPin() {
+  $('obp-pin-area').innerHTML = `
+    <div class="pin-dots">${[0,1,2,3].map(i => `<span class="${i < obpPin.length ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="pin-pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n => `<button onclick="obpKey('${n}')">${n}</button>`).join('')}
+      <button class="util" onclick="obpPin='';renderObpPin();$('obp-done').disabled=true">Clear</button>
+      <button onclick="obpKey('0')">0</button>
+      <button class="util" onclick="obpPin=obpPin.slice(0,-1);renderObpPin();$('obp-done').disabled=obpPin.length!==4">⌫</button>
+    </div>`;
+}
+function obpKey(k) {
+  if (obpPin.length >= 4) return;
+  obpPin += k; renderObpPin();
+  $('obp-done').disabled = obpPin.length !== 4;
+}
+function onboardPinDone() {
+  if (parentUser.fresh) {
+    DB.household.parents.push({ id: parentUser.id, displayName: parentUser.displayName, isOwner: true, hasPin: true });
+  }
+  parentUser.hasPin = true;
+  saveDB(DB);
+  toast('PIN created');
+  enterParentHome();
+}
+
+/* ==========================================================================
+   PARENT DASHBOARD
+   ========================================================================== */
+function enterParentHome() {
+  show('scr-parent-home');
+  setSession({ type: 'parent', parentId: parentUser.id });
+  renderParentHome();
+  idleLocked = false; lastActivity = Date.now();
+}
+function renderParentHome() {
+  const h = DB.household;
+  $('ph-household-name').textContent = h.displayName;
+  $('ph-user-name').textContent = parentUser.displayName;
+  const invBtn = $('ph-invite-btn');
+  const pending = $('ph-invite-pending');
+  if (h.pendingInvitation) {
+    invBtn.style.display = 'none';
+    pending.classList.add('open');
+    $('ph-invite-pending-detail').textContent =
+      `Sent to ${h.pendingInvitation.email} — expires ${new Date(h.pendingInvitation.expiresAt).toLocaleDateString()}.`;
+  } else if (h.parents.length >= 2) {
+    invBtn.style.display = 'none';
+    pending.classList.remove('open');
+  } else {
+    invBtn.style.display = '';
+    pending.classList.remove('open');
+  }
+  $('ph-second-parent-note').style.display = parentUser.isOwner ? 'none' : 'block';
+  const delBtn = $('ph-delete-btn');
+  delBtn.disabled = !parentUser.isOwner;
+  delBtn.title = parentUser.isOwner ? '' : 'Owner only (403 owner_only)';
+  $('dh-name').textContent = h.displayName;
+
+  const wrap = $('ph-children'); wrap.innerHTML = '';
+  if (DB.children.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="big">🧒</div><div style="font-weight:700">No children yet</div><div class="small muted" style="margin-top:4px">Create the first profile to get started.</div>
+      <button class="btn btn-filled btn-big btn-block" style="max-width:320px;margin:24px auto 0" onclick="openDialog('dlg-addchild')">${ICON('i-add')} Add child</button></div>`;
+  } else {
+    const grid = document.createElement('div'); grid.className = 'child-grid';
+    DB.children.forEach(c => grid.appendChild(childCard(c)));
+    wrap.appendChild(grid);
+    // end-of-list button (replaces the ambiguous FAB)
+    const add = document.createElement('button');
+    add.className = 'btn btn-text btn-block';
+    add.style.cssText = 'margin-top:16px;justify-content:center';
+    add.innerHTML = `${ICON('i-add')} Add child`;
+    add.onclick = () => openDialog('dlg-addchild');
+    wrap.appendChild(add);
+  }
+  $('ph-set-name').textContent = h.displayName;
+  $('ph-set-currency').textContent = `${cur(h.defaultCurrencyKey).title} (${h.defaultCurrencyKey})`;
+  $('ph-set-parents').textContent = h.parents.map(p => p.displayName + (p.isOwner ? ' (owner)' : '')).join(', ');
+}
+function childCard(c) {
+  const card = document.createElement('div');
+  card.className = 'card-elev clickable';
+  card.style.padding = '16px';
+  const badge = c.locked
+    ? (c.lockedUntil === 'MAX'
+      ? '<span class="chip badge-perm">' + ICON('i-lock') + ' Locked</span>'
+      : `<span class="chip badge-lock">${ICON('i-lock')} <span class="countdown" data-until="${c.lockedUntil}"></span></span>`)
+    : '<span class="chip badge-ok">Active</span>';
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="avatar child">${c.displayName.slice(0,1).toUpperCase()}</div>
+      <div class="grow" style="min-width:0">
+        <div style="font-weight:800">${c.displayName}</div>
+        <div class="small muted">${c.accountId} · ${cur(c.currencyKey).title}</div>
+      </div>
+      ${badge}
+    </div>
+    <div style="font-size:1.75rem;font-weight:800;margin-bottom:12px">${fmt(c.currentBalance, c.currencyKey)}</div>
+    <button class="btn btn-tonal btn-block" data-tx="${c.id}">${ICON('i-plus-minus')} Log transaction</button>`;
+  card.querySelector('[data-tx]').onclick = (e) => { e.stopPropagation(); openTxFor(c.id); };
+  card.onclick = () => openChildDetail(c.id);
+  return card;
+}
+/* child-card countdown ticking + auto-flip to Active at zero (no "expired" label) */
+setInterval(() => {
+  if (!$('scr-parent-home').classList.contains('active')) return;
+  let flipped = false;
+  DB.children.forEach(c => {
+    if (c.locked && c.lockedUntil !== 'MAX' && Date.now() >= c.lockedUntil) {
+      c.locked = false; c.lockedUntil = null; c.attempts = 0; flipped = true;
+    }
+  });
+  if (flipped) { saveDB(DB); renderParentHome(); return; }
+  document.querySelectorAll('#ph-children .countdown').forEach(el => {
+    const ms = Number(el.dataset.until) - Date.now();
+    el.textContent = ms > 0 ? mmss(ms) : '0:00';
+  });
+}, 1000);
+
+function goParentTab(tab) {
+  $('ph-tab-children').style.display = tab === 'children' ? '' : 'none';
+  $('ph-tab-settings').style.display = tab === 'settings' ? '' : 'none';
+  document.querySelectorAll('#scr-parent-home .navrail button, #scr-parent-home .bottomnav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#scr-parent-home .navrail button, #scr-parent-home .bottomnav button').forEach(b => {
+    if ((tab === 'children' && b.textContent.includes('Kids')) || (tab === 'settings' && b.textContent.includes('Settings'))) b.classList.add('active');
+  });
+}
+function logout() { setSession(null); idleLocked = false; show('scr-landing'); }
+
+/* --- Invite --- */
+function submitInvite() {
+  const email = $('inv-email').value.trim();
+  if (!email.includes('@')) {
+    fillProblemDetails($('inv-alert'), { title: 'Validation error', detail: 'Enter a valid email address.', code: 'validation_error', status: 400 });
+    return;
+  }
+  DB.household.pendingInvitation = { id: 'inv1', email, expiresAt: Date.now() + 7 * 86400000 };
+  saveDB(DB);
+  hideAlert($('inv-alert')); closeDialog('dlg-invite');
+  toast('Invitation sent (mock) — logged as ParentInvited');
+  renderParentHome();
+}
+function cancelInvitation() {
+  DB.household.pendingInvitation = null; saveDB(DB);
+  toast('Invitation cancelled — logged as ParentInvitationCancelled');
+  renderParentHome();
+}
+
+/* --- Add child --- */
+function submitAddChild() {
+  const name = $('ac-name').value.trim();
+  if (!name) { toast('Display name is required'); return; }
+  if (DB.children.length >= 9) { toast('409 children_max_reached (max 9)'); return; }
+  const alphabet = '0123456789ABCDEFGHJKLMNPRTVWXYZ';
+  let aid = ''; for (let i = 0; i < 5; i++) aid += alphabet[Math.floor(Math.random() * alphabet.length)];
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  DB.children.push({ id: 'c' + Date.now(), accountId: aid, displayName: name, currencyKey: DB.household.defaultCurrencyKey, currentBalance: 0, locked: false, lockedUntil: null, pin, attempts: 0 });
+  saveDB(DB);
+  closeDialog('dlg-addchild'); $('ac-name').value = '';
+  $('pr-account').textContent = aid;
+  $('pr-pin').textContent = pin;
+  openDialog('dlg-pin-reveal');
+  renderParentHome();
+}
+
+/* --- Settings edit --- */
+function submitSettings() {
+  const name = $('hs-name').value.trim();
+  if (name) DB.household.displayName = name;
+  DB.household.defaultCurrencyKey = $('hs-currency').value;
+  saveDB(DB);
+  closeDialog('dlg-settings');
+  toast('Settings saved — logged as HouseholdSettingsUpdated');
+  renderParentHome();
+}
+
+/* ==========================================================================
+   CHILD DRILL-DOWN
+   ========================================================================== */
+let cdChild = null;
+function openChildDetail(id) {
+  cdChild = DB.children.find(c => c.id === id);
+  show('scr-child-detail');
+  renderChildDetail();
+}
+function renderChildDetail() {
+  const c = cdChild;
+  $('cd-name').textContent = c.displayName;
+  $('cd-account').textContent = `Account ${c.accountId}`;
+  const curc = cur(c.currencyKey);
+  $('cd-balance').textContent = fmt(c.currentBalance, c.currencyKey);
+  $('cd-currency-line').textContent = `${curc.title} (${curc.key})`;
+  const chip = $('cd-lock-chip'), alert = $('cd-lock-alert'), btn = $('cd-lock-btn');
+  if (c.locked) {
+    chip.innerHTML = c.lockedUntil === 'MAX'
+      ? '<span class="chip badge-perm">' + ICON('i-lock') + ' Locked</span>'
+      : '<span class="chip badge-lock">' + ICON('i-lock') + ' <span class="countdown" id="cd-countdown"></span></span>';
+    alert.classList.add('open');
+    $('cd-lock-title').textContent = c.lockedUntil === 'MAX' ? 'Permanently locked' : 'Locked';
+    $('cd-lock-detail').textContent = c.lockedUntil === 'MAX'
+      ? 'This child cannot log in and the PIN cannot be changed. Unlocking is the only recovery path.'
+      : 'Timed lockout — expires automatically, or unlock it now.';
+    btn.innerHTML = ICON('i-unlock') + ' Unlock';
+    if (c.lockedUntil !== 'MAX') startCdCountdown();
+  } else {
+    chip.innerHTML = '<span class="chip badge-ok">Active</span>';
+    alert.classList.remove('open');
+    btn.innerHTML = ICON('i-lock') + ' Lock';
+  }
+  renderTimeline($('cd-timeline'), DB.transactions.filter(t => t.childId === c.id));
+  fillCurrencySelect($('cur-select'), c.currencyKey);
+  updateCurrencyWarning();
+  $('pin-lock-warn').style.display = c.locked ? '' : 'none';
+  $('pin-form-area').style.display = c.locked ? 'none' : '';
+}
+let cdTimer = null;
+function startCdCountdown() {
+  clearInterval(cdTimer);
+  cdTimer = setInterval(() => {
+    if (!cdChild || !cdChild.locked || cdChild.lockedUntil === 'MAX') { clearInterval(cdTimer); return; }
+    const el = $('cd-countdown'); if (!el) return;
+    const ms = cdChild.lockedUntil - Date.now();
+    if (ms <= 0) { clearInterval(cdTimer); cdChild.locked = false; cdChild.lockedUntil = null; cdChild.attempts = 0; saveDB(DB); renderChildDetail(); return; }
+    el.textContent = mmss(ms);
+  }, 1000);
+}
+function toggleLock() {
+  const c = cdChild;
+  c.locked = !c.locked;
+  if (c.locked) { c.lockedUntil = 'MAX'; toast('Locked — logged as ChildAccountLocked'); }
+  else { c.lockedUntil = null; c.attempts = 0; toast('Unlocked — counter reset, logged as ChildAccountUnlocked'); }
+  saveDB(DB); renderChildDetail();
+}
+function updateCurrencyWarning() {
+  const c = cdChild; if (!c) return;
+  const to = cur($('cur-select').value);
+  $('cur-warn-detail').textContent =
+    `${fmt(c.currentBalance, c.currencyKey)} becomes ${Number(c.currentBalance).toFixed(to.decimalDigits)} ${to.key} — same number, new denomination. No conversion is applied.`;
+}
+document.addEventListener('change', e => { if (e.target && e.target.id === 'cur-select') updateCurrencyWarning(); });
+function submitCurrency() {
+  cdChild.currencyKey = $('cur-select').value; saveDB(DB);
+  closeDialog('dlg-currency');
+  toast('Currency changed — SignalR OnBalanceUpdated pushed (mock)');
+  renderChildDetail();
+}
+function submitChildPin() {
+  const c = cdChild;
+  const np = $('cp-new').value;
+  if (c.locked) {
+    fillProblemDetails($('cp-alert'), { title: 'Account locked', detail: 'The PIN cannot be changed while the account is locked. Unlock it first — unlocking never requires a PIN change.', code: 'account_locked', status: 423 });
+    return;
+  }
+  if (!/^\d{4}$/.test(np)) {
+    fillProblemDetails($('cp-alert'), { title: 'Validation error', detail: 'PIN must be exactly 4 digits.', code: 'validation_error', status: 400 });
+    return;
+  }
+  c.pin = np; saveDB(DB);
+  hideAlert($('cp-alert')); $('cp-new').value = ''; closeDialog('dlg-child-pin');
+  toast('PIN updated — sessions invalidated (SecurityStamp rotated)');
+}
+
+/* --- log transaction (works from drill-down FAB-less button or child-card quick action) --- */
+let txType = 'CREDIT', txChild = null;
+function openTxFor(childId) {
+  txChild = DB.children.find(c => c.id === childId);
+  $('tx-child-line').textContent = `For ${txChild.displayName} (${cur(txChild.currencyKey).title})`;
+  $('tx-scale-hint').textContent = `${cur(txChild.currencyKey).title} — max ${cur(txChild.currencyKey).decimalDigits} decimal digits.`;
+  hideAlert($('tx-alert'));
+  $('tx-amount').value = ''; $('tx-reason').value = '';
+  setTxType('CREDIT');
+  openDialog('dlg-tx');
+}
+function setTxType(t) {
+  txType = t;
+  $('tx-credit-btn').className = t === 'CREDIT' ? 'btn btn-filled grow' : 'btn btn-outlined grow';
+  $('tx-debit-btn').className = t === 'DEBIT' ? 'btn btn-danger grow' : 'btn btn-outlined grow';
+}
+function submitTx() {
+  const c = txChild || cdChild;
+  hideAlert($('tx-alert'));
+  const curc = cur(c.currencyKey);
+  $('tx-scale-hint').textContent = `${curc.title} — max ${curc.decimalDigits} decimal digits.`;
+  const reason = stripEmoji($('tx-reason').value.trim());
+  if (!reason) { $('tx-reason').parentElement.classList.add('invalid'); return; }
+  $('tx-reason').parentElement.classList.remove('invalid');
+  const amount = parseFloat($('tx-amount').value);
+  if (!(amount > 0)) {
+    fillProblemDetails($('tx-alert'), { title: 'Validation error', detail: 'Amount must be greater than 0.', code: 'validation_error', status: 400 });
+    return;
+  }
+  if (txType === 'DEBIT' && c.currentBalance - amount < 0) {
+    fillProblemDetails($('tx-alert'), { title: 'Negative balance not acceptable', detail: `Debiting ${fmt(amount, c.currencyKey)} would bring the balance below zero (${fmt(c.currentBalance, c.currencyKey)} available).`, code: 'negative_balance_not_acceptable', status: 422 });
+    return;
+  }
+  c.currentBalance = txType === 'CREDIT' ? c.currentBalance + amount : c.currentBalance - amount;
+  DB.transactions.push({ id: 't' + Date.now(), childId: c.id, type: txType, currencyKey: c.currencyKey, amount, reason, remainingAfter: c.currentBalance, createdAt: Date.now() });
+  saveDB(DB);
+  closeDialog('dlg-tx'); $('tx-amount').value = ''; $('tx-reason').value = '';
+  toast('Saved — SignalR OnBalanceUpdated pushed (mock)');
+  if ($('scr-child-detail').classList.contains('active') && cdChild && cdChild.id === c.id) renderChildDetail();
+  else renderParentHome();
+}
+
+/* ==========================================================================
+   PARENT INACTIVITY LOCK (FR-P6) — countdown appears when < 2:01 remains
+   ========================================================================== */
+const IDLE_MS = 5 * 60 * 1000;
+const IDLE_SHOW_MS = 2 * 60 * 1000 + 1000; // show countdown when this much has elapsed (2:01 left)
+let lastActivity = Date.now();
+let idleLocked = false;
+
+function markActivity() { lastActivity = Date.now(); }
+['click', 'keydown', 'touchstart', 'wheel'].forEach(ev => document.addEventListener(ev, markActivity, { passive: true }));
+document.addEventListener('visibilitychange', markActivity);
+
+setInterval(() => {
+  if (!$('scr-parent-home').classList.contains('active')) return;
+  const elapsed = Date.now() - lastActivity;
+  const remaining = IDLE_MS - elapsed;
+  const showCd = !idleLocked && remaining < IDLE_SHOW_MS && remaining > 0;
+  ['idle-chip-bar', 'idle-chip-rail'].forEach(id => $(id).classList.toggle('show', showCd));
+  if (showCd) {
+    const t = mmss(remaining);
+    $('idle-cd-bar').textContent = t;
+    $('idle-cd-rail').textContent = t;
+  }
+  if (!idleLocked && remaining <= 0) triggerIdleLock();
+}, 500);
+
+function triggerIdleLock() {
+  if (!$('scr-parent-home').classList.contains('active')) return;
+  idleLocked = true;
+  $('idle-chip-bar').classList.remove('show');
+  $('idle-chip-rail').classList.remove('show');
+  openDialog('dlg-idle-lock');
+  idlePin = '';
+  renderIdlePin();
+}
+let idlePin = '';
+function renderIdlePin() {
+  $('idle-pin-area').innerHTML = `
+    <div class="pin-dots">${[0,1,2,3].map(i => `<span class="${i < idlePin.length ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="pin-pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n => `<button onclick="idleKey('${n}')">${n}</button>`).join('')}
+      <button class="util" onclick="idlePin='';renderIdlePin()">Clear</button>
+      <button onclick="idleKey('0')">0</button>
+      <button class="util" onclick="idlePin=idlePin.slice(0,-1);renderIdlePin()">⌫</button>
+    </div>`;
+}
+function idleKey(k) {
+  if (idlePin.length >= 4) return;
+  idlePin += k; renderIdlePin();
+  if (idlePin.length === 4) {
+    setTimeout(() => {
+      if (idlePin === PARENT_PIN) {
+        hideAlert($('idle-alert')); closeDialog('dlg-idle-lock');
+        idleLocked = false; lastActivity = Date.now();
+        toast('Session unlocked');
+      } else {
+        idlePin = '';
+        fillProblemDetails($('idle-alert'), { title: 'Wrong PIN', detail: 'Enter your Parent Lock PIN.', code: 'invalid_credentials', status: 401 });
+        renderIdlePin();
+      }
+    }, 150);
+  }
+}
+
+/* ==========================================================================
+   DEMO TOOLBAR
+   ========================================================================== */
+function demoIdleLock() { triggerIdleLock(); }
+function demoIpBan() {
+  $('ib-detail').textContent = 'This IP is banned for 24 hours (tier 1 of 3: 24 h → 1 week → 1 month). It expires ' +
+    new Date(Date.now() + 86400000).toLocaleString() + '.';
+  show('scr-ip-banned');
+}
+function demoReset() {
+  localStorage.removeItem(LS_DATA); localStorage.removeItem(LS_HISTORY); localStorage.removeItem(LS_SESSION);
+  location.reload();
+}
+
+/* ==========================================================================
+   BOOT — auto-redirect on valid token (FR-C2)
+   ========================================================================== */
+(function boot() {
+  DB = loadDB();
+  const s = getSession();
+  if (s && s.type === 'child') {
+    const c = DB.children.find(x => x.id === s.childId);
+    if (c) { openChildHome(c); return; }
+  }
+  if (s && s.type === 'parent') {
+    const p = DB.household.parents.find(x => x.id === s.parentId);
+    if (p) { parentUser = p; enterParentHome(); return; }
+  }
+  show('scr-landing');
+})();
+</script>
+</body>
+</html>
