@@ -154,7 +154,11 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
   * System shall set an initial random 4-digit numeric PIN for the child profile.
   * New child profiles inherit the household's default currency (§4.3).
 * **FR-P4 (Child PIN Reset):**
-  * Parent shall be able to view child usernames and update any child’s 4-digit PIN from the Parent Dashboard at any time.
+  * Parent shall be able to view child usernames and update any child's 4-digit PIN from the Parent Dashboard — but not while the account is locked (FR-P8). A locked account must be unlocked first; unlocking does not require changing the PIN.
+* **FR-P8 (Child Account Lock/Unlock):**
+  * Parent shall be able to manually lock and unlock any child account at any time from the Parent Dashboard.
+  * A locked child account cannot log in, and its PIN cannot be changed until a parent unlocks it.
+  * Unlocking clears the lock and resets the unsuccessful-login counter (the lockout ladder restarts).
 * **FR-P7 (Child Currency Change):**
   * Parent shall be able to change a child's currency at any time from the Parent Dashboard.
   * On change, the child's current balance carries over **numerically** into the new currency (no conversion rate); the parent makes this decision knowingly.
@@ -186,7 +190,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
   * Re-opening the web application on an authenticated child device shall directly open the child's home dashboard without requesting re-entry of the PIN.
   * Child can manually logout from the account.
     * Does logout invalidate the persistent token? Yes.
-    * Does logout require Pocket-Money Account ID next time? Yes.
+    * Does logout require Pocket-Money Account ID next time? Yes — unless the device's local child-history (UI Specification §3) still lists the profile, in which case re-login is PIN-only from the chooser.
     * Does logout require PIN next time? Yes.
     * Does logout reset unsuccessful login attempts? No.
 * **FR-C3 (Dashboard & Balance Summary):**
@@ -201,9 +205,10 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
 
 ### 5.3 Shared Device Guard & Security Controls
 
-* **FR-S1 (Parent Lock Modal):**
-  * Tapping "Switch to Parent Dashboard" or attempting to navigate to parent-only UI routes from a child device session must trigger a modal prompt requesting the 4-digit Parent PIN.
-  * Access to administrative functions shall be denied until the valid Parent PIN is verified.
+* **FR-S1 (Session Separation):**
+  * Child screens shall expose no "Switch to Parent Dashboard" affordance; reaching parent functions requires a full parent login (Firebase).
+  * On a shared device the parent logs out before handing the device to a child (UI Specification §3, ChildrenHistory flow).
+  * The Parent Lock PIN (FR-P6 inactivity unlock) is retained solely to resume an idle-locked parent session; it is not an admin gate between child and parent sessions.
 * **FR-S2 (Strict Data Isolation):**
   * Authenticated child sessions shall have read-only access restricted strictly to their own `child_id` and corresponding `transactions` records within their `household_id`.
 
@@ -217,7 +222,7 @@ The system consists of four primary entities: `Households`, `Parents`, `Children
   * If 3 consecutive unsuccessful login attempts are made to the same child account, the account must be locked for 5 minutes;
   * After the account is unlocked, if another 3 consecutive unsuccessful login attempts are made to the same child account, the account must be locked for 15 minutes;
   * After the second unlock, if a third set of 3 consecutive unsuccessful login attempts is made to the same child account, the account must be permanently locked;
-  * A parent can unlock their child’s account.
+  * A parent can unlock their child's account via a dedicated lock/unlock action; unlocking does **not** require changing the PIN.
   * If 10 unsuccessful login attempts are made from the same IP address, whether against one or multiple child accounts, that IP address must be banned for 24 hours the first time, 1 week the second time, and 1 month the third time.
     * IP ban will be on the IP across the app; The IP cannot access any Parent account or PocketMoney Account in any Household.
     * IP ban does NOT block static assets, like homepage of the website, CDN, etc.
