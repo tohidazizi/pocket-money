@@ -24,5 +24,6 @@
     <Project Path="tests/PocketMoney.Api.Test/PocketMoney.Api.Test.csproj" />
     <Project Path="tests/PocketMoney.Application.Test/PocketMoney.Application.Test.csproj" />
     <Project Path="tests/PocketMoney.Client.Test/PocketMoney.Client.Test.csproj" />
+    <Project Path="tests/PocketMoney.Global.Test/PocketMoney.Global.Test.csproj" Id="db7795a1-3b9f-441e-bc53-d75d973b8b49" />
   </Folder>
 </Solution>

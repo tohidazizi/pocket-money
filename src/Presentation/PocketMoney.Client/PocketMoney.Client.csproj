@@ -4,8 +4,6 @@
          static-asset pipeline. Without this, the dev server serves the raw
          placeholder and _framework/blazor.webassembly 404s. -->
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
-    <!-- SPA-style fallback so deep links resolve to index.html. -->
-    <StaticWebAssetSpaFallbackEnabled>true</StaticWebAssetSpaFallbackEnabled>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../PocketMoney.Shared/PocketMoney.Shared.csproj" />

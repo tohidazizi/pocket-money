@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+	  <PackageReference Include="Microsoft.NET.Test.Sdk" />
+	  <PackageReference Include="xunit" />
+	  <PackageReference Include="xunit.runner.visualstudio" />
+	  <PackageReference Include="FluentAssertions" />
+	  <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cross Layer\PocketMoney.Global\PocketMoney.Global.csproj" />
+  </ItemGroup>
+</Project>
