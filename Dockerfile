@@ -1,0 +1,34 @@
+# Pocket-Money API — Railway deployment unit (CI/CD doc §4.2)
+#
+# Multi-stage build on .NET 10 LTS (decision 2026-08-16). Base images pinned;
+# bump deliberately with global.json.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# Copy solution + props first for better layer caching
+COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY PocketMoney.slnx ./
+COPY src/Cross src/Cross
+COPY src/Domain src/Domain
+COPY src/Application src/Application
+COPY src/Infrastructure src/Infrastructure
+COPY src/Presentation src/Presentation
+
+RUN dotnet restore "src/Presentation/PocketMoney.Api/PocketMoney.Api.csproj"
+RUN dotnet publish "src/Presentation/PocketMoney.Api/PocketMoney.Api.csproj" \
+    -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# Explicit WORKDIR + non-root USER (CI doc §4.2): predictable runtime
+# context regardless of base-image defaults.
+WORKDIR /app
+COPY --from=build /app/publish .
+
+RUN adduser --disabled-password --gecos "" app
+USER app
+
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "PocketMoney.Api.dll"]

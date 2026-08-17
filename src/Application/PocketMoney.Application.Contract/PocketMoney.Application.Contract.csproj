@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PocketMoney.Application.Model/PocketMoney.Application.Model.csproj" />
+    <ProjectReference Include="../../Cross Layer/PocketMoney.Global/PocketMoney.Global.csproj" />
+  </ItemGroup>
+</Project>

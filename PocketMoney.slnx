@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Application/">
+    <Project Path="src/Application/PocketMoney.Application.Contract/PocketMoney.Application.Contract.csproj" />
+    <Project Path="src/Application/PocketMoney.Application.Model/PocketMoney.Application.Model.csproj" />
+    <Project Path="src/Application/PocketMoney.Application/PocketMoney.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Cross Layer/">
+    <Project Path="src/Cross Layer/PocketMoney.Global/PocketMoney.Global.csproj" />
+  </Folder>
+  <Folder Name="/src/Domain/">
+    <Project Path="src/Domain/PocketMoney.Domain/PocketMoney.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/PocketMoney.Authentication/PocketMoney.Authentication.csproj" />
+    <Project Path="src/Infrastructure/PocketMoney.Persistence/PocketMoney.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/PocketMoney.Api/PocketMoney.Api.csproj" />
+    <Project Path="src/Presentation/PocketMoney.Client/PocketMoney.Client.csproj" />
+    <Project Path="src/Presentation/PocketMoney.Shared/PocketMoney.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PocketMoney.Api.Test/PocketMoney.Api.Test.csproj" />
+    <Project Path="tests/PocketMoney.Application.Test/PocketMoney.Application.Test.csproj" />
+    <Project Path="tests/PocketMoney.Client.Test/PocketMoney.Client.Test.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <PropertyGroup>
+    <!-- Resolves the #[.{fingerprint}] placeholders in index.html against the
+         static-asset pipeline. Without this, the dev server serves the raw
+         placeholder and _framework/blazor.webassembly 404s. -->
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- SPA-style fallback so deep links resolve to index.html. -->
+    <StaticWebAssetSpaFallbackEnabled>true</StaticWebAssetSpaFallbackEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PocketMoney.Shared/PocketMoney.Shared.csproj" />
+    <ProjectReference Include="../../Application/PocketMoney.Application.Model/PocketMoney.Application.Model.csproj" />
+    <ProjectReference Include="../../Cross Layer/PocketMoney.Global/PocketMoney.Global.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+    <PackageReference Include="MudBlazor" />
+    <PackageReference Include="Refit.HttpClientFactory" />
+  </ItemGroup>
+</Project>

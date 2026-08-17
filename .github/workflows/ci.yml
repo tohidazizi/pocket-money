@@ -1,0 +1,70 @@
+# Pocket-Money CI — CI/CD Pipeline Configuration doc §3
+#
+# Quality gate for every push to main and every PR targeting main.
+# Railway GitHub Autodeploy waits for this workflow to pass before
+# deploying (CI doc §4.3).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api:
+    name: API build & test
+    runs-on: ubuntu-latest
+
+    # Ephemeral Postgres for integration tests (CI doc §3.2).
+    # Credentials match tests/PocketMoney.Api.Test/DatabaseFixture.cs.
+    # Version matches the local dev instance (postgres:16).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: "postgres"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK (pinned via global.json)
+        uses: actions/setup-dotnet@v4
+
+      - name: Restore
+        run: dotnet restore PocketMoney.slnx
+
+      - name: Build (Release)
+        run: dotnet build PocketMoney.slnx -c Release --no-restore
+
+      # Unit tests + integration tests against the service-container Postgres.
+      # The Api.Test fixture drops/creates pocketmoney_test and applies EF
+      # migrations itself — fresh schema per run, no seed state.
+      - name: Test
+        run: dotnet test PocketMoney.slnx -c Release --no-build --nologo
+
+  client:
+    name: Client publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK (pinned via global.json)
+        uses: actions/setup-dotnet@v4
+
+      - name: Publish Blazor WASM client
+        run: dotnet publish "src/Presentation/PocketMoney.Client/PocketMoney.Client.csproj" -c Release -o out/client
+
+      - name: Upload published client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocketmoney-client
+          path: out/client/wwwroot

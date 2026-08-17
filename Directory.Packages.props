@@ -1,0 +1,37 @@
+<Project>
+  <!-- SDS §1.5: versions pinned centrally. One place to bump — every project inherits. -->
+  <ItemGroup>
+    <!-- Everything targets .NET 10 LTS (decision 2026-08-16: downgrade from
+         .NET 11 preview for V1.0 stability). EF Core 10 + Npgsql provider 10. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+
+    <!-- API / hosting -->
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.20" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+
+    <!-- Client — .NET 10 LTS versions per the net10.0 blazorwasm template -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" />
+    <PackageVersion Include="MudBlazor" Version="9.8.0" />
+    <PackageVersion Include="Refit" Version="15.1.0" />
+    <PackageVersion Include="Refit.HttpClientFactory" Version="15.1.0" />
+
+    <!-- Testing (SDS §1.5) -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="FluentAssertions" Version="8.10.0" />
+    <PackageVersion Include="bunit" Version="2.9.0" />
+    <PackageVersion Include="Testcontainers.PostgreSQL" Version="4.14.0" />
+  </ItemGroup>
+</Project>

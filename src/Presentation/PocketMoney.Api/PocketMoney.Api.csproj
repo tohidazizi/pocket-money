@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Application/PocketMoney.Application/PocketMoney.Application.csproj" />
+    <ProjectReference Include="../../Application/PocketMoney.Application.Contract/PocketMoney.Application.Contract.csproj" />
+    <ProjectReference Include="../../Application/PocketMoney.Application.Model/PocketMoney.Application.Model.csproj" />
+    <ProjectReference Include="../../Infrastructure/PocketMoney.Persistence/PocketMoney.Persistence.csproj" />
+    <ProjectReference Include="../../Infrastructure/PocketMoney.Authentication/PocketMoney.Authentication.csproj" />
+    <ProjectReference Include="../PocketMoney.Shared/PocketMoney.Shared.csproj" />
+    <ProjectReference Include="../../Cross Layer/PocketMoney.Global/PocketMoney.Global.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
