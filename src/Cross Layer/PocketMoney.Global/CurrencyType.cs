@@ -46,14 +46,14 @@ public abstract partial record CurrencyType
     public string Key => GetType().Name;
 
     /// <summary>
-    /// Prevents derivation outside this scope
+    /// Prevents derivation outside this scope — nested types can still call it.
     /// </summary>
-    protected CurrencyType(string symbol, string country, string title, string? nativeTitle = null, byte decimalDigits = 2)
+    private CurrencyType(string symbol, string country, string title, string? nativeTitle = null, byte decimalDigits = 2)
     {
         if(Key.Length > KeyMaxLength)
             throw new InvalidOperationException($"Currency key '{Key}' exceeds {KeyMaxLength} characters.");
 
-        if(decimalDigits < 0 || decimalDigits > 3)
+        if(decimalDigits > 3)
             throw new InvalidOperationException($"Invalid number of decimal digits '{decimalDigits}' for currency '{Key}'. Number of decimal digits must be between 0 and 3.");
 
         Symbol = symbol;
@@ -69,9 +69,10 @@ public abstract partial record CurrencyType
     public record Point() : CurrencyType("🪙", "World", PointKey);
 
     /// <summary>
-    /// Auto-register all concrete CurrencyType records (including those in partial files)
+    /// Auto-register all concrete CurrencyType records (including those in partial files).
+    /// Duplicate keys throw — a deterministic guard against accidental key collisions.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, CurrencyType> _all =
+    private static readonly Dictionary<string, CurrencyType> _all =
         typeof(CurrencyType).Assembly
             .GetTypes()
             .Where(t => t.IsSubclassOf(typeof(CurrencyType)) && !t.IsAbstract)
@@ -81,7 +82,7 @@ public abstract partial record CurrencyType
     /// <summary>
     /// Returns all supported currencies as a read-only collection. See: <see href="https://en.wikipedia.org/wiki/ISO_4217"/>
     /// </summary>
-    public static IReadOnlyCollection<CurrencyType> Supported => _all.Values as IReadOnlyCollection<CurrencyType> ?? [];
+    public static IReadOnlyCollection<CurrencyType> Supported => _all.Values;
 
     /// <summary>
     /// null when the key is unknown — callers reject with 400
