@@ -17,6 +17,11 @@ public static class ErrorCodes
     public const string NotFound = "not_found";
     public const string AccountLocked = "account_locked";
     public const string AccountPermanentlyLocked = "account_permanently_locked";
+    public const string ParentCapReached = "parent_cap_reached";
+    public const string InvitationPending = "invitation_pending";
+    public const string AlreadyInHousehold = "already_in_household";
+    public const string InvitationInvalid = "invitation_invalid";
+    public const string InvitationExpired = "invitation_expired";
 }
 
 /// <summary>

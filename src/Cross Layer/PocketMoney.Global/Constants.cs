@@ -14,6 +14,27 @@ public static class Constants
     /// <summary>Household limits (FR-P2).</summary>
     public const byte MaxParentsPerHousehold = 2;
 
+    public static class Household
+    {
+        /// <summary>SDS §9.2: household display name.</summary>
+        public const int DisplayNameMaxLength = 60;
+    }
+
+    public static class Parent
+    {
+        /// <summary>SDS §9.2: invitation/parent email.</summary>
+        public const int EmailMaxLength = 320;
+    }
+
+    public static class Invitation
+    {
+        /// <summary>SDS §5: invitations expire after 7 days.</summary>
+        public const byte ExpiryDays = 7;
+
+        /// <summary>Random token size in bytes (256-bit) before encoding.</summary>
+        public const byte TokenBytes = 32;
+    }
+
     public static class Child
     {
         public const byte AccountIdLength = 5;

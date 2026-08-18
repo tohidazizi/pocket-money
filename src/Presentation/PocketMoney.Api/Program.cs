@@ -7,6 +7,7 @@ using PocketMoney.Api;
 using PocketMoney.Api.Endpoints;
 using PocketMoney.Application;
 using PocketMoney.Application.Contract;
+using PocketMoney.Authentication;
 using PocketMoney.Persistence;
 using PocketMoney.Persistence.Data;
 using Scalar.AspNetCore;
@@ -26,14 +27,24 @@ builder.Services.AddPocketMoneyPersistence(builder.Configuration);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<IChildTokenIssuer, ChildJwtTokenIssuer>();
 builder.Services.AddScoped<IChildAuthService, ChildAuthService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IHouseholdService, HouseholdService>();
+builder.Services.AddScoped<IInvitationService, InvitationService>();
+builder.Services.AddScoped<IInvitationEmailDispatcher, LoggingInvitationEmailDispatcher>();
 
-// --- Child JWT authentication (SDS §3.2) ---
+// --- Authentication: two bearer schemes (API Spec §1.2) ---
+// Firebase scheme = parent JWTs (public JWKS verification, projectId only).
+// Child scheme  = custom 365-day symmetric JWTs (SDS §3.2).
+// Firebase is the DEFAULT scheme: parent routes authorize without naming it.
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Missing configuration 'Jwt:Key' (SDS §1.4).");
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddAuthentication(FirebaseAuthDefaults.Scheme)
+    .AddFirebaseAuthentication(builder.Configuration)
+    .AddJwtBearer(ChildAuthDefaults.Scheme, options =>
     {
+        options.MapInboundClaims = false;
+        options.Events = JwtBearerChallenge.ProblemDetailsEvents();
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -94,6 +105,7 @@ app.MapGet("/healthz", async (PocketMoneyDbContext db, CancellationToken ct) =>
 
 var api = app.MapGroup("/api/v1");
 api.MapChildLogin();
+api.MapHousehold();
 
 app.Run();
 

@@ -3,6 +3,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../PocketMoney.Application.Model/PocketMoney.Application.Model.csproj" />
+    <ProjectReference Include="../../Domain/PocketMoney.Domain/PocketMoney.Domain.csproj" />
     <ProjectReference Include="../../Cross Layer/PocketMoney.Global/PocketMoney.Global.csproj" />
   </ItemGroup>
 </Project>
