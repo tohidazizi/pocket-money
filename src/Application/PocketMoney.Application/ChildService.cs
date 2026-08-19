@@ -15,7 +15,8 @@ namespace PocketMoney.Application;
 public sealed class ChildService(
     PocketMoneyDbContext db,
     IAuditService audit,
-    TimeProvider time) : IChildService
+    TimeProvider time,
+    ILedgerPushService? ledgerPush = null) : IChildService
 {
     /// <summary>Uniqueness retries before deferring to the unique index (SDS §3.1).</summary>
     private const int AccountIdRetries = 5;
@@ -142,7 +143,10 @@ public sealed class ChildService(
             new { childId = child.Id, currencyKey = currency.Key }, ipAddress);
         await db.SaveChangesAsync(ct);
 
-        // SignalR OnBalanceUpdated push to child_{id} lands with the hub phase (SDS §7.2).
+        // Balance unchanged, new denomination — the child dashboard must
+        // re-render the carried-over balance (SDS §7.2).
+        if (ledgerPush is not null)
+            await ledgerPush.PushCurrencyChangedAsync(child.Id, child.CurrentBalance, currency.Key, ct);
 
         return new ChangeCurrencyResult.Changed(new ChildCurrencyResponse(
             CurrencyDto.From(currency), child.CurrentBalance));

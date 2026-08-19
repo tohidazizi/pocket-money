@@ -38,6 +38,12 @@ public static class JwtBearerChallenge
         {
             context.HandleResponse();
 
+            // Dual-scheme routes (GET /transactions, /hubs/ledger) challenge
+            // BOTH schemes; the first write wins — the second must not
+            // attempt to write to an already-started response.
+            if (context.Response.HasStarted)
+                return Task.CompletedTask;
+
             // Validation events pin the exact code via HttpContext items
             // (deterministic); fall back to inspecting the failure message.
             var pinnedCode = context.HttpContext.Items[AuthContextKeys.ErrorCode] as string;

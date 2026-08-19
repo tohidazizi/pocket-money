@@ -1,10 +1,12 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PocketMoney.Api;
 using PocketMoney.Api.Endpoints;
+using PocketMoney.Api.Hubs;
 using PocketMoney.Application;
 using PocketMoney.Application.Contract;
 using PocketMoney.Authentication;
@@ -32,6 +34,11 @@ builder.Services.AddScoped<IHouseholdService, HouseholdService>();
 builder.Services.AddScoped<IInvitationService, InvitationService>();
 builder.Services.AddScoped<IInvitationEmailDispatcher, LoggingInvitationEmailDispatcher>();
 builder.Services.AddScoped<IChildService, ChildService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+
+// --- Real-time ledger push (SDS §7.2) ---
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ILedgerPushService, SignalRLedgerPushService>();
 
 // --- Authentication: two bearer schemes (API Spec §1.2) ---
 // Firebase scheme = parent JWTs (public JWKS verification, projectId only).
@@ -126,6 +133,15 @@ var api = app.MapGroup("/api/v1");
 api.MapChildLogin();
 api.MapHousehold();
 api.MapChildMe();
+api.MapTransactions();
+
+// --- Real-time ledger hub (SDS §7.2) ---
+// Accepts BOTH bearer schemes: parents (Firebase) and children (own JWTs).
+app.MapHub<LedgerHub>("/hubs/ledger")
+    .RequireAuthorization(new AuthorizeAttribute
+    {
+        AuthenticationSchemes = $"{FirebaseAuthDefaults.Scheme},{ChildAuthDefaults.Scheme}",
+    });
 
 app.Run();
 

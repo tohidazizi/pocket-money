@@ -23,6 +23,7 @@ public static class ErrorCodes
     public const string AlreadyInHousehold = "already_in_household";
     public const string InvitationInvalid = "invitation_invalid";
     public const string InvitationExpired = "invitation_expired";
+    public const string NegativeBalance = "negative_balance_not_acceptable";
 }
 
 /// <summary>
