@@ -1,0 +1,118 @@
+@page "/login/parent"
+@inject FirebaseAuthService Firebase
+@inject AppState State
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@* Parent login (UI Spec §2, §7.2): Firebase email/password or Google popup.
+   Optional ?invite=TOKEN is carried through to acceptance on the dashboard. *@
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="py-6">
+    <div style="text-align:center">
+        <span class="material-symbols-outlined" style="font-size:48px; color:var(--primary)">verified_user</span>
+        <MudText Typo="Typo.h3" Class="mt-2">Parent Login</MudText>
+        @if (_inviteToken is not null)
+        {
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Class="mt-1">You're joining via an invitation</MudChip>
+        }
+    </div>
+
+    <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined" Class="mt-5"
+                  InputType="InputType.Email" Disabled="@_busy" />
+    <MudTextField @bind-Value="_password" Label="Password" Variant="Variant.Outlined" Class="mt-3"
+                  InputType="_showPassword ? InputType.Text : InputType.Password"
+                  Adornment="Adornment.End"
+                  AdornmentIcon="@(_showPassword ? Icons.Material.Outlined.Visibility : Icons.Material.Outlined.VisibilityOff)"
+                  OnAdornmentClick="() => _showPassword = !_showPassword"
+                  Disabled="@_busy" />
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+    }
+
+    <MudStack Spacing="3" Class="mt-5">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                   OnClick="SignInEmailAsync" Disabled="@_busy">Sign in</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Large" FullWidth="true"
+                   OnClick="SignInGoogleAsync" Disabled="@_busy">
+            <span class="material-symbols-outlined mr-2" style="color:#ea4335">g_translate</span>
+            Continue with Google
+        </MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="GoLanding">Back</MudButton>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private string _email = "";
+    private string _password = "";
+    private string? _error;
+    private bool _busy;
+    private bool _showPassword;
+    private string? _inviteToken;
+
+    protected override void OnInitialized()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        _inviteToken = query["invite"];
+        if (!string.IsNullOrWhiteSpace(_inviteToken))
+            State.PendingInviteToken = _inviteToken;
+    }
+
+    private async Task SignInEmailAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Enter your email and password.";
+            return;
+        }
+        await SignInAsync(() => Firebase.SignInWithEmailAsync(_email.Trim(), _password));
+    }
+
+    private Task SignInGoogleAsync() => SignInAsync(Firebase.SignInWithGoogleAsync);
+
+    private async Task SignInAsync(Func<Task<FirebaseAuthService.FirebaseUser>> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await State.ParentLoginSucceededAsync();
+            Nav.NavigateTo("/parent");
+        }
+        catch (JSException ex)
+        {
+            _error = MapFirebaseError(ex);
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "The sign-in window was closed.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void GoLanding() => Nav.NavigateTo("/");
+
+    /// <summary>Firebase error codes arrive as the JSInterop exception message.</summary>
+    private static string MapFirebaseError(JSException ex)
+    {
+        var msg = ex.Message ?? "";
+        if (msg.Contains("auth/invalid-credential") || msg.Contains("auth/wrong-password")
+            || msg.Contains("auth/user-not-found") || msg.Contains("auth/invalid-email"))
+            return "Wrong email or password.";
+        if (msg.Contains("auth/popup-closed-by-user") || msg.Contains("auth/cancelled-popup-request"))
+            return "The Google sign-in window was closed before finishing.";
+        if (msg.Contains("auth/popup-blocked"))
+            return "Your browser blocked the pop-up. Allow pop-ups and try again.";
+        if (msg.Contains("auth/too-many-requests"))
+            return "Too many attempts. Wait a bit, then try again.";
+        if (msg.Contains("auth/network-request-failed"))
+            return "Network problem. Check your connection.";
+        return "Sign-in failed. Please try again.";
+    }
+}

@@ -1,0 +1,33 @@
+@* Invite-parent dialog (API Spec §3.5): email → invitation (token emailed
+   server-side). Max 2 parents per household (Constants.MaxParentsPerHousehold). *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            The invitation email carries a one-time link. It expires after 7 days.
+        </MudText>
+        <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined" Class="mt-3"
+                      InputType="InputType.Email" @onkeydown="OnKeyDown" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Send" Disabled="@(!IsValidEmail)">Send invitation</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _email = "";
+
+    private bool IsValidEmail =>
+        _email.Contains('@') && _email.Contains('.') && _email.Trim().Length >= 5;
+
+    private Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && IsValidEmail) Send();
+        return Task.CompletedTask;
+    }
+
+    private void Send() => MudDialog.Close(DialogResult.Ok(_email.Trim()));
+    private void Cancel() => MudDialog.Cancel();
+}

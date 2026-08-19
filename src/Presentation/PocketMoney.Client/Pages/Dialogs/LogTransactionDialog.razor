@@ -1,0 +1,60 @@
+@* Log-transaction dialog (API Spec §6.1): CREDIT/DEBIT toggle, amount with
+   currency-aware decimal digits, free-text reason (server sanitizes). *@
+<MudDialog>
+    <DialogContent>
+        <MudToggleGroup @bind-Value="_type" Color="Color.Primary" Class="mb-3">
+            <MudToggleItem Value="@("CREDIT")">Credit (+)</MudToggleItem>
+            <MudToggleItem Value="@("DEBIT")">Debit (−)</MudToggleItem>
+        </MudToggleGroup>
+
+        <MudNumericField @bind-Value="_amount" Label="Amount" Variant="Variant.Outlined"
+                         Min="0" Format="@($"F{Currency.DecimalDigits}")" />
+
+        <MudTextField @bind-Value="_reason" Label="Reason" Variant="Variant.Outlined" Class="mt-3"
+                      Lines="2" Counter="100" MaxLength="100"
+                      HelperText="e.g. Weekly allowance, tooth fairy" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!CanSubmit)">
+            Log @(_type == "CREDIT" ? "credit" : "debit")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string ChildName { get; set; } = "";
+    [Parameter] public CurrencyDto Currency { get; set; } = default!;
+
+    private string _type = "CREDIT";
+    private decimal _amount;
+    private string _reason = "";
+    private string? _error;
+
+    public sealed record Result(string Type, decimal Amount, string Reason);
+
+    private bool CanSubmit => _amount > 0 && _reason.Trim().Length > 0;
+
+    private void Submit()
+    {
+        if (_amount <= 0)
+        {
+            _error = "Amount must be greater than zero.";
+            return;
+        }
+        if (_reason.Trim().Length == 0)
+        {
+            _error = "Enter a short reason.";
+            return;
+        }
+        MudDialog.Close(DialogResult.Ok(new Result(_type, _amount, _reason.Trim())));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

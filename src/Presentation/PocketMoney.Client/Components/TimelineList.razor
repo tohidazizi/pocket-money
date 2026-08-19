@@ -1,0 +1,145 @@
+@using PocketMoney.Global
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Shared keyset-paginated timeline (SDS §12): infinite scroll, newest-first,
+   per-row currency rendering (each row keeps its snapshot, §2.1.1/§9.5),
+   and the nextCursor:null stop rule (§12.3) — once exhausted, no further
+   fetches until the timeline is reloaded from page 1. *@
+
+@if (_loading && _items.Count == 0)
+{
+    <div class="pm-empty">Loading timeline…</div>
+}
+else if (_items.Count == 0)
+{
+    <div class="pm-empty">@EmptyText</div>
+}
+else
+{
+    <div id="@_scrollId">
+        <MudPaper Elevation="1" Class="pa-4" Style="background: var(--surface)">
+            @foreach (var row in _items)
+            {
+                <div class="pm-timeline-row">
+                    <div class="pm-tx-icon @(row.Type == "CREDIT" ? "credit" : "debit")">
+                        @(row.Type == "CREDIT" ? "↑" : "↓")
+                    </div>
+                    <div class="pm-tx-main">
+                        <div class="pm-tx-reason">@row.Reason</div>
+                        <div class="pm-tx-date">@row.CreatedAt.ToLocalTime().ToString("MMM d, yyyy · HH:mm")</div>
+                    </div>
+                    <div>
+                        <div class="pm-tx-amount @(row.Type == "CREDIT" ? "credit" : "debit")">
+                            @(row.Type == "CREDIT" ? "+" : "−")@FormatAmount(row)
+                        </div>
+                        <div class="pm-tx-balance-after">= @FormatBalance(row)</div>
+                    </div>
+                </div>
+            }
+        </MudPaper>
+
+        @if (_exhausted)
+        {
+            <div class="pm-empty">End of history</div>
+        }
+        else if (_loading)
+        {
+            <div class="pm-empty">Loading more…</div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Fetches a page given the (opaque) cursor; null cursor = page 1.</summary>
+    [Parameter] public Func<string?, Task<TimelinePage>> FetchPage { get; set; } = default!;
+    [Parameter] public string EmptyText { get; set; } = "No transactions yet.";
+    [Parameter] public byte PageSize { get; set; } = Constants.Timeline.DefaultPageSize;
+
+    private readonly List<TransactionDto> _items = [];
+    private string? _nextCursor;
+    private bool _exhausted;
+    private bool _loading;
+    private bool _fetching;
+    private readonly string _scrollId = "pm-timeline-" + Guid.NewGuid().ToString("N")[..8];
+    private DotNetObjectReference<TimelineList>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadPageAsync(null);
+            _self = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("pmInterop.watchScroll", _self, _scrollId, 400);
+        }
+    }
+
+    /// <summary>Reloads from page 1 (resets the exhausted flag, SDS §12.3).</summary>
+    public async Task ReloadAsync()
+    {
+        _items.Clear();
+        _nextCursor = null;
+        _exhausted = false;
+        await LoadPageAsync(null);
+    }
+
+    /// <summary>Prepends a pushed transaction (SignalR, SDS §12.4).</summary>
+    public void Prepend(TransactionDto row)
+    {
+        _items.Insert(0, row);
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnNearBottom()
+    {
+        if (_exhausted || _fetching || _loading) return;
+        await LoadPageAsync(_nextCursor);
+    }
+
+    private async Task LoadPageAsync(string? cursor)
+    {
+        if (_exhausted || _fetching) return;
+        _fetching = true;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var page = await FetchPage(cursor);
+            _items.AddRange(page.Items);
+            _nextCursor = page.NextCursor;
+            // The server is the sole authority on "more exists" (SDS §12.3).
+            if (page.NextCursor is null)
+                _exhausted = true;
+        }
+        finally
+        {
+            _fetching = false;
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string FormatAmount(TransactionDto row)
+    {
+        var currency = CurrencyType.Parse(row.CurrencyKey);
+        return currency is null
+            ? $"{row.Amount:F3} {row.CurrencyKey}"
+            : MoneyFormat.Format(row.Amount, CurrencyDto.From(currency));
+    }
+
+    private static string FormatBalance(TransactionDto row)
+    {
+        var currency = CurrencyType.Parse(row.CurrencyKey);
+        return currency is null
+            ? $"{row.RemainingAfter:F3} {row.CurrencyKey}"
+            : MoneyFormat.Format(row.RemainingAfter, CurrencyDto.From(currency));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("pmInterop.unwatchScroll", _scrollId); }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}

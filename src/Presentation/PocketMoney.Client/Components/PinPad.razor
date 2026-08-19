@@ -1,0 +1,52 @@
+@* Reusable 4-digit PIN pad with dot indicators (NFR-2: 48px touch targets).
+   Used by child login (PIN-only & full), parent idle-unlock, and PIN dialogs. *@
+<div class="pm-pin-dots @(ChildMode ? "child-mode" : "")">
+    @for (var i = 0; i < 4; i++)
+    {
+        var idx = i;
+        <div class="dot @(idx < Value.Length ? "filled" : "")"></div>
+    }
+</div>
+
+<div class="pm-pinpad" role="group" aria-label="PIN pad">
+    @foreach (var digit in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 })
+    {
+        var d = digit;
+        <button type="button" @onclick="() => Press(d)" disabled="@Disabled">@d</button>
+    }
+    <button type="button" class="pad-action" @onclick="Clear" disabled="@Disabled">Clear</button>
+    <button type="button" @onclick="() => Press(0)" disabled="@Disabled">0</button>
+    <button type="button" class="pad-action" @onclick="Backspace" disabled="@Disabled">⌫</button>
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    /// <summary>Amber accent for child surfaces; green for parent.</summary>
+    [Parameter] public bool ChildMode { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>Fires when the 4th digit lands.</summary>
+    [Parameter] public EventCallback<string> OnCompleted { get; set; }
+
+    private async Task Press(int digit)
+    {
+        if (Value.Length >= 4 || Disabled) return;
+        Value += digit.ToString();
+        await ValueChanged.InvokeAsync(Value);
+        if (Value.Length == 4)
+            await OnCompleted.InvokeAsync(Value);
+    }
+
+    private async Task Clear()
+    {
+        Value = "";
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task Backspace()
+    {
+        if (Value.Length == 0) return;
+        Value = Value[..^1];
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

@@ -1,0 +1,127 @@
+@page "/login/child"
+@page "/login/child/{AccountId}"
+@inject PocketMoneyApiClient Api
+@inject AppState State
+@inject ChildrenHistoryStore History
+@inject NavigationManager Nav
+
+@* Child login (UI Spec §3): Account ID + PIN (full) or PIN-only when the
+   child was selected from the ChildrenHistory page. *@
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="py-6">
+    <div style="text-align:center">
+        <span class="material-symbols-outlined" style="font-size:48px; color:var(--secondary)">child_care</span>
+        <MudText Typo="Typo.h3" Class="mt-2">
+            @(PinOnly ? $"Hi {ChildName}!" : "Kid Login")
+        </MudText>
+        @if (!PinOnly)
+        {
+            <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+                Enter your Account ID and PIN.
+            </MudText>
+        }
+    </div>
+
+    @if (!PinOnly)
+    {
+        <div class="mt-5">
+            <AccountIdInput @ref="_aidInput" OnChanged="_ => StateHasChanged()" Disabled="@_busy" />
+        </div>
+    }
+
+    <div class="mt-4">
+        <PinPad @bind-Value="_pin" ChildMode="true" Disabled="@_busy" OnCompleted="SubmitAsync" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">@_error</MudAlert>
+    }
+
+    <div class="mt-4" style="text-align:center">
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="BackAsync">Back</MudButton>
+    </div>
+</MudContainer>
+
+@code {
+    /// <summary>Route param present → PIN-only re-entry (UI Spec §3.1).</summary>
+    [Parameter] public string? AccountId { get; set; }
+
+    private AccountIdInput? _aidInput;
+    private string _pin = "";
+    private string? _error;
+    private bool _busy;
+
+    private bool PinOnly => !string.IsNullOrWhiteSpace(AccountId);
+    private string ChildName => History_Name ?? "there";
+    private string? History_Name { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PinOnly)
+        {
+            var history = await History.GetAsync();
+            History_Name = history.TryGetValue(AccountId!.ToUpperInvariant(), out var entry) ? entry.Name : null;
+            if (History_Name is null)
+                Nav.NavigateTo("/children-history"); // stale chooser entry
+        }
+    }
+
+    private async Task SubmitAsync(string pin)
+    {
+        _busy = true;
+        _error = null;
+        var accountId = PinOnly ? AccountId!.ToUpperInvariant() : _aidInput?.Value ?? "";
+        try
+        {
+            if (!PinOnly && accountId.Length != 5)
+            {
+                _error = "Enter all 5 characters of your Account ID.";
+                return;
+            }
+
+            var login = await Api.ChildLoginAsync(accountId, pin);
+            await History.UpsertAsync(login.Child.AccountId, login.Child.DisplayName);
+            await State.ChildLoginSucceededAsync(login);
+            Nav.NavigateTo("/child");
+        }
+        catch (ApiException ex)
+        {
+            _pin = "";
+            if (ex.Problem.Status == 423)
+            {
+                // Cache lock state for the ChildrenHistory badge (UI Spec §3.1).
+                var lockValue = ex.Problem.LockedUntil is { } until && until != DateTimeOffset.MaxValue
+                    ? until.ToString("O")
+                    : "permanent";
+                await History.SetLockedAsync(accountId, lockValue);
+                _error = ex.Problem.LockedUntil is { } u && u != DateTimeOffset.MaxValue
+                    ? $"Account locked. Try again in {FormatRemaining(u)}."
+                    : "Account locked. Ask a parent to unlock it.";
+                return;
+            }
+            _error = ex.Problem.Status switch
+            {
+                401 => "Wrong Account ID or PIN.",
+                403 when ex.Problem.IsIpBanned => "This device is temporarily blocked. Try again later.",
+                _ => ex.Problem.Display,
+            };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string FormatRemaining(DateTimeOffset until)
+    {
+        var span = until - DateTimeOffset.UtcNow;
+        return span <= TimeSpan.Zero ? "a moment" : $"{(int)span.TotalHours:D2}:{span.Minutes:D2}:{span.Seconds:D2}";
+    }
+
+    private async Task BackAsync()
+    {
+        var history = await History.GetAsync();
+        Nav.NavigateTo(history.Count > 0 ? "/children-history" : "/");
+    }
+}

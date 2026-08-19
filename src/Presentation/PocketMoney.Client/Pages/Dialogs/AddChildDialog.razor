@@ -1,0 +1,30 @@
+@* Add-child dialog (API Spec §5.1): display name only; the server assigns
+   the Base-31 Account ID and generates the one-time PIN. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            The Account ID and one-time PIN are generated for you. Share them with your child.
+        </MudText>
+        <MudTextField @bind-Value="_name" Label="Display name" Variant="Variant.Outlined" Class="mt-3"
+                      HelperText="Shown on the child's login and dashboard." @onkeydown="OnKeyDown" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" OnClick="Add" Disabled="@(_name.Trim().Length < 2)">Add child</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _name = "";
+
+    private Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _name.Trim().Length >= 2) Add();
+        return Task.CompletedTask;
+    }
+
+    private void Add() => MudDialog.Close(DialogResult.Ok(_name.Trim()));
+    private void Cancel() => MudDialog.Cancel();
+}

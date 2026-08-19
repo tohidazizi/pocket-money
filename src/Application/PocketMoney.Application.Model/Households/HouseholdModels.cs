@@ -60,4 +60,7 @@ public sealed record InvitationResponse(Guid InvitationId, DateTimeOffset Expire
 
 public sealed record AcceptInvitationRequest(string? Token);
 
+/// <summary>PUT /household/parents/me/pin (API Spec §4.1).</summary>
+public sealed record SetParentPinRequest(string? CurrentPin, string? NewPin);
+
 public sealed record AcceptInvitationResponse(Guid HouseholdId, string? DisplayName);

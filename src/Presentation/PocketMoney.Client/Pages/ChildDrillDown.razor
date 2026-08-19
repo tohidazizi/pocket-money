@@ -1,0 +1,225 @@
+@page "/parent/children/{ChildId:guid}"
+@inject AppState State
+@inject PocketMoneyApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@* Child drill-down (UI Spec §7.4): per-child timeline, log transaction,
+   change currency (with carry-over warning), lock/unlock, reset PIN. *@
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
+    @if (_child is null)
+    {
+        <div class="pm-empty">Loading…</div>
+    }
+    else
+    {
+        <div class="d-flex align-center mb-2">
+            <MudIconButton Icon="@Icons.Material.Outlined.ArrowBack" OnClick="GoBackToParent" aria-label="Back to dashboard" />
+            <div>
+                <MudText Typo="Typo.h4">@_child.DisplayName</MudText>
+                <MudText Typo="Typo.caption" Style="color:var(--on-surface-variant)">@_child.AccountId</MudText>
+            </div>
+            <MudSpacer />
+            @if (_child.Locked)
+            {
+                <LockBadge LockedUntil="@_child.LockedUntil" Permanent="@(_child.LockedUntil is null)" />
+            }
+        </div>
+
+        @* Balance + actions *@
+        <div class="pm-balance-hero">
+            <div class="label">Current balance</div>
+            <div class="amount">@MoneyFormat.Format(_child.CurrentBalance, _child.Currency)</div>
+            <div class="label">@_child.Currency.Title (@_child.Currency.Key)</div>
+        </div>
+
+        <MudStack Row="true" Wrap="Wrap.Wrap" Class="mt-3" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add"
+                       OnClick="OpenLogTransactionAsync">Log transaction</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Outlined.CurrencyExchange"
+                       OnClick="ChangeCurrencyAsync">Change currency</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="@(_child.Locked ? Color.Success : Color.Warning)"
+                       StartIcon="@(_child.Locked ? Icons.Material.Outlined.LockOpen : Icons.Material.Outlined.Lock)"
+                       OnClick="ToggleLockAsync">
+                @(_child.Locked ? "Unlock" : "Lock")
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Outlined.Key"
+                       OnClick="ResetPinAsync">Reset PIN</MudButton>
+        </MudStack>
+
+        @* Per-child timeline (API Spec §6.2 childId filter) *@
+        <MudText Typo="Typo.h5" Class="mt-6 mb-2">Ledger</MudText>
+        <TimelineList @ref="_timeline" FetchPage="FetchTimelineAsync"
+                      EmptyText="No transactions yet. Log the first one above." />
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid ChildId { get; set; }
+
+    private PocketMoney.Application.Model.Households.ChildSummaryDto? _child;
+    private TimelineList? _timeline;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (State.Current != AppState.SessionKind.Parent)
+        {
+            Nav.NavigateTo("/login/parent");
+            return;
+        }
+
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) { Nav.NavigateTo("/login/parent"); return; }
+
+        try
+        {
+            await RefreshAsync(bearer);
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Problem.Display, Severity.Error);
+            Nav.NavigateTo("/parent");
+        }
+    }
+
+    private void GoBackToParent() => Nav.NavigateTo("/parent");
+
+    private async Task RefreshAsync(string bearer)
+    {
+        var household = await Api.GetHouseholdAsync(bearer);
+        State.SetHousehold(household);
+        _child = household.Children.FirstOrDefault(c => c.Id == ChildId);
+        if (_child is null)
+        {
+            Snackbar.Add("Child not found.", Severity.Warning);
+            Nav.NavigateTo("/parent");
+        }
+    }
+
+    private async Task<TimelinePage> FetchTimelineAsync(string? cursor)
+    {
+        var bearer = await State.ParentTokenAsync();
+        return await Api.GetTransactionsAsync(bearer ?? "", childId: ChildId, cursor: cursor);
+    }
+
+    // ------------------------------------------------------------------
+    // Log transaction (API Spec §6.1): CREDIT/DEBIT, amount, reason
+    // ------------------------------------------------------------------
+    private async Task OpenLogTransactionAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null || _child is null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["ChildName"] = _child.DisplayName,
+            ["Currency"] = _child.Currency,
+        };
+        var dialog = await Dialogs.ShowAsync<LogTransactionDialog>("Log transaction", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: LogTransactionDialog.Result r })
+        {
+            try
+            {
+                await Api.CreateTransactionAsync(bearer,
+                    new CreateTransactionRequest(ChildId, r.Type, r.Amount, r.Reason));
+                Snackbar.Add("Transaction logged.", Severity.Success);
+                await RefreshAsync(bearer);
+                if (_timeline is not null) await _timeline.ReloadAsync();
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Change currency — numerical carry-over (SDS §2.1.1, UI Spec §7.4)
+    // ------------------------------------------------------------------
+    private async Task ChangeCurrencyAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null || _child is null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["ChildName"] = _child.DisplayName,
+            ["CurrentKey"] = _child.Currency.Key,
+            ["CurrentBalance"] = _child.CurrentBalance,
+            ["CurrentCurrency"] = _child.Currency,
+        };
+        var dialog = await Dialogs.ShowAsync<ChangeCurrencyDialog>("Change currency", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string newKey })
+        {
+            try
+            {
+                var response = await Api.ChangeChildCurrencyAsync(bearer, ChildId,
+                    new ChangeChildCurrencyRequest(newKey));
+                Snackbar.Add($"Currency changed — balance carried over numerically.", Severity.Success);
+                await RefreshAsync(bearer);
+                if (_timeline is not null) await _timeline.ReloadAsync();
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Lock / unlock (SDS §3.2)
+    // ------------------------------------------------------------------
+    private async Task ToggleLockAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null || _child is null) return;
+
+        var action = _child.Locked ? "unlock" : "lock";
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            $"{(_child.Locked ? "Unlock" : "Lock")} {_child.DisplayName}?",
+            _child.Locked
+                ? "The child will be able to log in again."
+                : "The child will not be able to log in until you unlock them. Existing sessions are revoked.",
+            yesText: action, cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        try
+        {
+            await Api.SetChildLockAsync(bearer, ChildId, new SetChildLockRequest(!_child.Locked));
+            await RefreshAsync(bearer);
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Problem.Display, Severity.Error);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Reset PIN (API Spec §5.2): rotates the security stamp
+    // ------------------------------------------------------------------
+    private async Task ResetPinAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null || _child is null) return;
+
+        var parameters = new DialogParameters { ["ChildName"] = _child.DisplayName };
+        var dialog = await Dialogs.ShowAsync<ResetChildPinDialog>("Reset PIN", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string newPin })
+        {
+            try
+            {
+                await Api.ResetChildPinAsync(bearer, ChildId, new ResetChildPinRequest(newPin));
+                Snackbar.Add("PIN reset. Existing child sessions are signed out.", Severity.Success);
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+    }
+}

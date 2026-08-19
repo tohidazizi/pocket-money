@@ -1,0 +1,110 @@
+@page "/children-history"
+@inject ChildrenHistoryStore History
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+
+@* ChildrenHistory Page (UI Spec §3.1): previously logged-in children with
+   per-entry remove, clear-all (confirm), new-child login, and "I'm a Parent".
+   Locked entries show a badge instead of the PIN form. Redirects home when
+   the store is empty. *@
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-6">
+    <div style="text-align:center">
+        <MudText Typo="Typo.h3">Who's logging in?</MudText>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">Pick your name, then enter your PIN.</MudText>
+    </div>
+
+    @if (_entries.Count == 0)
+    {
+        <div class="pm-empty">No one has logged in on this device yet.</div>
+    }
+    else
+    {
+        <MudPaper Elevation="1" Class="pa-2 mt-4" Style="background:var(--surface)">
+            @foreach (var (accountId, entry) in _entries)
+            {
+                <div class="pm-timeline-row" style="cursor:@(entry.IsLocked ? "default" : "pointer")"
+                     @onclick="() => PickChild(accountId, entry)">
+                    <MudAvatar Color="Color.Secondary" Size="Size.Medium">
+                        @entry.Name[..1].ToUpperInvariant()
+                    </MudAvatar>
+                    <div class="pm-tx-main">
+                        <div class="pm-tx-reason">@entry.Name</div>
+                        <div class="pm-tx-date">@accountId</div>
+                    </div>
+                    @if (entry.IsLocked)
+                    {
+                        <LockBadge LockedUntil="@ParseLock(entry)" Permanent="@entry.IsPermanent" />
+                    }
+                    <MudIconButton Icon="@Icons.Material.Outlined.DeleteOutline" Size="Size.Small"
+                                   aria-label="@RemoveLabel(entry.Name)"
+                                   OnClick="e => RemoveAsync(accountId)" />
+                </div>
+            }
+        </MudPaper>
+
+        <div style="text-align:center" class="mt-2">
+            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small" OnClick="ClearAllAsync">
+                Clear entire list
+            </MudButton>
+        </div>
+    }
+
+    <MudStack Spacing="3" Class="mt-6">
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large" FullWidth="true"
+                   OnClick="GoLoginChild">
+            Log in as a new kid
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                   OnClick="GoLoginParent">
+            I'm a Parent
+        </MudButton>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private Dictionary<string, ChildrenHistoryStore.Entry> _entries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entries = await History.GetAsync();
+        // Empty/unavailable store → redirect to homepage (UI Spec §3.1).
+        if (_entries.Count == 0)
+            Nav.NavigateTo("/");
+    }
+
+    private void PickChild(string accountId, ChildrenHistoryStore.Entry entry)
+    {
+        if (entry.IsLocked) return; // locked = visible but not selectable (§3.1)
+        Nav.NavigateTo($"/login/child/{accountId}");
+    }
+
+    private async Task RemoveAsync(string accountId)
+    {
+        await History.RemoveAsync(accountId);
+        _entries.Remove(accountId);
+        if (_entries.Count == 0) Nav.NavigateTo("/");
+    }
+
+    private async Task ClearAllAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Clear the list?",
+            "This removes all children from this device's login list. Their accounts are not affected.",
+            yesText: "Clear", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await History.ClearAsync();
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private static DateTimeOffset? ParseLock(ChildrenHistoryStore.Entry entry) =>
+        entry.LockedUntil is not null && entry.LockedUntil != "permanent"
+        && DateTimeOffset.TryParse(entry.LockedUntil, out var dt) ? dt : null;
+
+    private static string RemoveLabel(string name) => $"Remove {name}";
+
+    private void GoLoginChild() => Nav.NavigateTo("/login/child");
+    private void GoLoginParent() => Nav.NavigateTo("/login/parent");
+}

@@ -1,0 +1,63 @@
+@* Account ID input: 5 separate boxes with auto-advance (ui_prototype_v03). *@
+<div class="pm-aid-row">
+    @for (var i = 0; i < 5; i++)
+    {
+        var idx = i;
+        <input id="aid-@idx" maxlength="1" value="@(_chars[idx].ToString())"
+               @oninput="e => HandleInput(idx, e)"
+               @onkeydown="e => OnKeyDown(idx, e)"
+               aria-label="@AidLabel(idx)"
+               disabled="@Disabled" />
+    }
+</div>
+
+@code {
+    private readonly char[] _chars = new char[5];
+
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<string> OnChanged { get; set; }
+
+    public string Value => new string(_chars).TrimEnd('\0').ToUpperInvariant();
+    public bool IsComplete => _chars.All(c => c != '\0');
+
+    private static string AidLabel(int idx) => $"Account ID character {idx + 1}";
+
+    public void SetValue(string value)
+    {
+        Array.Clear(_chars);
+        var v = (value ?? "").ToUpperInvariant();
+        for (var i = 0; i < Math.Min(5, v.Length); i++) _chars[i] = v[i];
+    }
+
+    private Task HandleInput(int idx, ChangeEventArgs e) =>
+        OnInput(idx, e.Value?.ToString() ?? string.Empty);
+
+    private async Task OnInput(int idx, string input)
+    {
+        if (input.Length == 0) { _chars[idx] = '\0'; }
+        else
+        {
+            var c = char.ToUpperInvariant(input[^1]);
+            if (!char.IsLetterOrDigit(c)) { _chars[idx] = '\0'; }
+            else
+            {
+                _chars[idx] = c;
+                if (idx < 4) await FocusBox(idx + 1);
+            }
+        }
+        await OnChanged.InvokeAsync(Value);
+    }
+
+    private async Task OnKeyDown(int idx, Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Backspace" && _chars[idx] == '\0' && idx > 0)
+            await FocusBox(idx - 1);
+    }
+
+    private Task FocusBox(int idx) =>
+        JS is not null
+            ? JS.InvokeVoidAsync("pmInterop.focusElement", $"aid-{idx}").AsTask()
+            : Task.CompletedTask;
+
+    [Inject] private Microsoft.JSInterop.IJSRuntime? JS { get; set; }
+}

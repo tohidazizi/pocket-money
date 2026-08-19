@@ -1,0 +1,63 @@
+@page "/"
+@inject AppState State
+@inject NavigationManager Nav
+@inject ChildrenHistoryStore History
+@inject SessionStore Sessions
+
+@* Landing page (UI Spec §7.1): "I'm a Kid" / "I'm a Parent".
+   Boot logic: valid child token → dashboard; no token + history → chooser. *@
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-8" Style="min-height:80vh; display:flex; align-items:center;">
+    <div style="text-align:center; width:100%;">
+        <span class="material-symbols-outlined" style="font-size:64px; color:var(--primary)">savings</span>
+        <MudText Typo="Typo.h2" Class="mt-2">Pocket Money</MudText>
+        <MudText Typo="Typo.body1" Style="color:var(--on-surface-variant)">
+            Your family's allowance ledger.
+        </MudText>
+
+        <MudStack Spacing="4" Class="mt-8">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large"
+                       FullWidth="true" OnClick="GoKid">
+                <MudIcon Icon="@Icons.Material.Outlined.ChildCare" Class="mr-2" /> I'm a Kid
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                       FullWidth="true" OnClick="GoParent">
+                <MudIcon Icon="@Icons.Material.Outlined.Person" Class="mr-2" /> I'm a Parent
+            </MudButton>
+        </MudStack>
+    </div>
+</MudContainer>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // FR-C2 / §3.2 automatic re-entry.
+        await State.RestoreSessionAsync();
+
+        switch (State.Current)
+        {
+            case AppState.SessionKind.Child:
+                Nav.NavigateTo("/child");
+                break;
+            case AppState.SessionKind.Parent:
+                Nav.NavigateTo("/parent");
+                break;
+            default:
+                // No token: history entries → chooser, else stay on landing.
+                var history = await History.GetAsync();
+                if (history.Count > 0)
+                    Nav.NavigateTo("/children-history");
+                break;
+        }
+    }
+
+    private void GoKid()
+    {
+        Nav.NavigateTo("/login/child");
+    }
+
+    private void GoParent()
+    {
+        Nav.NavigateTo("/login/parent");
+    }
+}

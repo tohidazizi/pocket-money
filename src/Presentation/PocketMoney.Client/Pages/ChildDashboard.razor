@@ -1,0 +1,85 @@
+@page "/child"
+@inject AppState State
+@inject PocketMoneyApiClient Api
+@inject LedgerHubService Hub
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+@* Child dashboard (FR-C3): balance hero + own timeline. Real-time updates
+   via SignalR OnBalanceUpdated (SDS §7.2). No parent affordances (§3.3). *@
+
+@if (State.ChildProfile is null)
+{
+    <div class="pm-empty">Loading…</div>
+}
+else
+{
+    var p = State.ChildProfile;
+    <div class="pm-balance-hero">
+        <div class="label">@p.DisplayName's money</div>
+        <div class="amount">@MoneyFormat.Format(p.CurrentBalance, p.Currency)</div>
+        <div class="label">@p.Currency.Title</div>
+    </div>
+
+    <MudText Typo="Typo.h5" Class="mt-6 mb-2">My activity</MudText>
+    <TimelineList @ref="_timeline" FetchPage="FetchTimelineAsync" EmptyText="No transactions yet — earn some points!" />
+}
+
+@code {
+    private TimelineList? _timeline;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (State.Current != AppState.SessionKind.Child)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        var bearer = State.ChildToken;
+        if (bearer is null) { Nav.NavigateTo("/"); return; }
+
+        try
+        {
+            var profile = await Api.GetChildMeAsync(bearer);
+            State.SetChildProfile(profile);
+        }
+        catch (ApiException ex) when (ex.Status == 401)
+        {
+            // security_stamp_mismatch (PIN reset / lock) or household gone
+            await State.LogoutAsync();
+            Nav.NavigateTo("/login/child");
+            return;
+        }
+
+        // Real-time push (SDS §7.2). child_id comes from the child's own JWT.
+        try
+        {
+            if (ChildTokenReader.ReadChildId(bearer) is { } childId)
+            {
+                Hub.OnBalanceUpdated += OnBalanceUpdated;
+                await Hub.StartAsync(bearer, childId);
+            }
+        }
+        catch (Exception)
+        {
+            // SignalR is best-effort; the timeline still works on demand.
+        }
+    }
+
+    private void OnBalanceUpdated(decimal balance, string _)
+    {
+        if (State.ChildProfile is null) return;
+        State.SetChildProfile(State.ChildProfile with { CurrentBalance = balance });
+        _timeline?.ReloadAsync();
+    }
+
+    private Task<TimelinePage> FetchTimelineAsync(string? cursor) =>
+        Api.GetTransactionsAsync(State.ChildToken!, cursor: cursor);
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.OnBalanceUpdated -= OnBalanceUpdated;
+        await Hub.DisposeAsync();
+    }
+}

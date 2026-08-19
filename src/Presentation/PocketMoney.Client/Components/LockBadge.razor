@@ -1,0 +1,44 @@
+@* Lock badge with optional live countdown for timed locks (UI Spec §5). *@
+<span class="pm-lock-badge">
+    <span class="material-symbols-outlined" style="font-size:14px">lock</span>
+    @Label
+</span>
+
+@code {
+    /// <summary>For timed locks: when the lock lifts → live countdown.</summary>
+    [Parameter] public DateTimeOffset? LockedUntil { get; set; }
+    [Parameter] public bool Permanent { get; set; }
+
+    private System.Timers.Timer? _ticker;
+    private string Label { get; set; } = "Locked";
+
+    protected override void OnInitialized()
+    {
+        if (LockedUntil is { } until && until != DateTimeOffset.MaxValue)
+        {
+            _ticker = new System.Timers.Timer(1000);
+            _ticker.Elapsed += (_, _) => InvokeAsync(UpdateCountdown);
+            _ticker.AutoReset = true;
+            _ticker.Start();
+            UpdateCountdown();
+        }
+        else
+        {
+            Label = Permanent ? "Locked" : "Locked";
+        }
+    }
+
+    private void UpdateCountdown()
+    {
+        if (LockedUntil is not { } until) return;
+        var remaining = until - DateTimeOffset.UtcNow;
+        Label = remaining <= TimeSpan.Zero
+            ? "Unlocking…"
+            : $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}";
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _ticker?.Dispose();
+}
+
+@implements IDisposable

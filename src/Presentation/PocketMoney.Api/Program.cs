@@ -100,6 +100,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+// --- CORS for the Blazor WASM client (separate origin in dev & prod) ---
+// Allowed origins from config; dev defaults cover the client dev server.
+var clientOrigins = builder.Configuration.GetSection("Client:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5117", "https://localhost:7230"];
+builder.Services.AddCors(options => options.AddPolicy("client", policy =>
+    policy.WithOrigins(clientOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .WithHeaders("Authorization")));
+
 var app = builder.Build();
 
 // --- D-2 (approved): migrations on startup, forward-only ---
@@ -111,6 +121,10 @@ using (var scope = app.Services.CreateScope())
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
+
+// CORS must run before authentication so the SignalR negotiate preflight
+// and API calls from the Blazor client origin are allowed.
+app.UseCors("client");
 
 if (!app.Environment.IsProduction())
 {

@@ -1,16 +1,87 @@
 ﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inject AppState State
+@inject NavigationManager Nav
+@implements IDisposable
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+<MudLayout>
+    <MudAppBar Elevation="0" Fixed="true">
+        <MudText Typo="Typo.h5" Class="font-weight-bold">Pocket Money</MudText>
+        <MudSpacer />
+        @if (State.Current == AppState.SessionKind.Parent)
+        {
+            <MudIconButton Icon="@Icons.Material.Outlined.Logout" Color="Color.Default"
+                           OnClick="LogoutAsync" Title="Log out" />
+        }
+        @if (State.Current == AppState.SessionKind.Child)
+        {
+            <MudIconButton Icon="@Icons.Material.Outlined.Logout" Color="Color.Default"
+                           OnClick="LogoutAsync" Title="Log out" />
+        }
+    </MudAppBar>
 
-        <article class="content px-4">
+    @* Navigation rail — ≥768px (UI Spec §2) *@
+    @if (State.Current != AppState.SessionKind.None)
+    {
+        <nav class="pm-rail">
+            @RenderNavItems()
+        </nav>
+    }
+
+    <MudMainContent>
+        <main class="pm-main @(State.Current != AppState.SessionKind.None ? "has-shell" : "")">
             @Body
-        </article>
-    </main>
-</div>
+        </main>
+    </MudMainContent>
+
+    @* Bottom navigation — <768px (UI Spec §2) *@
+    @if (State.Current != AppState.SessionKind.None)
+    {
+        <nav class="pm-bottom-nav">
+            @RenderNavItems()
+        </nav>
+    }
+</MudLayout>
+
+@if (State.IsParentLocked)
+{
+    <ParentIdleUnlock />
+}
+
+@code {
+    protected override void OnInitialized() => State.StateChanged += OnStateChanged;
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task LogoutAsync()
+    {
+        await State.LogoutAsync();
+        Nav.NavigateTo("/");
+    }
+
+    private RenderFragment RenderNavItems() => builder =>
+    {
+        if (State.Current == AppState.SessionKind.Parent)
+        {
+            builder.AddMarkupContent(0,
+                $"<a href=\"/parent\" class=\"{(IsActive("/parent") ? "active" : "")}\">" +
+                "<span class=\"material-symbols-outlined\">home</span><span>Home</span></a>");
+            builder.AddMarkupContent(1,
+                $"<a href=\"/parent/settings\" class=\"{(IsActive("/parent/settings") ? "active" : "")}\">" +
+                "<span class=\"material-symbols-outlined\">settings</span><span>Settings</span></a>");
+        }
+        else if (State.Current == AppState.SessionKind.Child)
+        {
+            builder.AddMarkupContent(0,
+                $"<a href=\"/child\" class=\"{(IsActive("/child") ? "active" : "")}\">" +
+                "<span class=\"material-symbols-outlined\">account_balance_wallet</span><span>Money</span></a>");
+            builder.AddMarkupContent(1,
+                $"<a href=\"/child/history\" class=\"{(IsActive("/child/history") ? "active" : "")}\">" +
+                "<span class=\"material-symbols-outlined\">history</span><span>History</span></a>");
+        }
+    };
+
+    private bool IsActive(string path) =>
+        Nav.ToBaseRelativePath(Nav.Uri).TrimStart('/') == path.TrimStart('/');
+
+    public void Dispose() => State.StateChanged -= OnStateChanged;
+}

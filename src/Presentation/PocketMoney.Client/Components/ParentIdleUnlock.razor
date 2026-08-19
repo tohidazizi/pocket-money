@@ -1,0 +1,62 @@
+@* Parent inactivity-lock modal (FR-P6, UI Spec §4): the ONLY purpose of the
+   Parent Lock PIN. Unlocks the idle-locked parent surface; verified against
+   the stored hash via PUT /parents/me/pin (set-to-self — V1 has no dedicated
+   verify endpoint). *@
+@inject AppState State
+@inject PocketMoneyApiClient Api
+@inject ISnackbar Snackbar
+
+<div class="pm-idle-overlay">
+    <div class="pm-idle-card">
+        <span class="material-symbols-outlined" style="font-size:40px; color:var(--primary)">lock</span>
+        <MudText Typo="Typo.h4" Class="mt-2">Parent Locked</MudText>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            You've been inactive for a while. Enter your Parent PIN to continue.
+        </MudText>
+
+        <div class="mt-4">
+            <PinPad @bind-Value="_pin" OnCompleted="TryUnlockAsync" ChildMode="false" Disabled="@_busy" />
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-3">@_error</MudText>
+        }
+    </div>
+</div>
+
+@code {
+    private string _pin = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task TryUnlockAsync(string pin)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var bearer = await State.ParentTokenAsync();
+            if (bearer is null) { await State.LogoutAsync(); return; }
+
+            if (await Api.VerifyParentPinAsync(bearer, pin))
+            {
+                State.UnlockParent();
+            }
+            else
+            {
+                _error = "Wrong PIN. Try again.";
+                _pin = "";
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Problem.Display;
+            _pin = "";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

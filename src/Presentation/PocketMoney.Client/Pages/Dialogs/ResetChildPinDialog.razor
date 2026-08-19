@@ -1,0 +1,51 @@
+@* Reset-child-PIN dialog (API Spec §5.2): parent chooses a fresh 4-digit
+   PIN (entered twice). Server rotates the security stamp → existing child
+   sessions are revoked on their next request. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            @ChildName's current sessions will be signed out after the reset.
+        </MudText>
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">New PIN</MudText>
+        <PinPad @bind-Value="_new" ChildMode="true" />
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Repeat new PIN</MudText>
+        <PinPad @bind-Value="_confirm" ChildMode="true" Disabled="@(_new.Length < 4)" OnCompleted="Submit" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" OnClick="() => Submit(string.Empty)"
+                   Disabled="@(_new.Length != 4 || _confirm.Length != 4)">Reset PIN</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string ChildName { get; set; } = "";
+
+    private string _new = "";
+    private string _confirm = "";
+    private string? _error;
+
+    private Task Submit(string _)
+    {
+        if (_new.Length != 4 || _confirm.Length != 4) return Task.CompletedTask;
+        if (_new != _confirm)
+        {
+            _error = "The PINs don't match. Try again.";
+            _new = "";
+            _confirm = "";
+            return Task.CompletedTask;
+        }
+        MudDialog.Close(DialogResult.Ok(_new));
+        return Task.CompletedTask;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

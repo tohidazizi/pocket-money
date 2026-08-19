@@ -1,0 +1,338 @@
+@page "/parent"
+@inject AppState State
+@inject PocketMoneyApiClient Api
+@inject InactivityTimerService Inactivity
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@implements IDisposable
+
+@* Parent dashboard (UI Spec §7.3): child cards with balance/currency/lock
+   badge, household settings, invite-parent, delete household (owner only),
+   first-parent onboarding (name + currency + PIN) and the inactivity lock. *@
+
+@if (_loading)
+{
+    <div class="pm-empty">Loading your household…</div>
+}
+else if (State.Household is null)
+{
+    <div class="pm-empty">@_loadError</div>
+}
+else
+{
+    var h = State.Household;
+    var me = h.Parents.FirstOrDefault(p => p.IsOwner) ?? h.Parents.FirstOrDefault();
+    var amIOwner = me?.IsOwner == true && me.Id == _myUid;
+
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
+        <div class="d-flex align-center mb-2">
+            <div>
+                <MudText Typo="Typo.h4">@(h.DisplayName ?? "Your Household")</MudText>
+                <MudText Typo="Typo.caption" Style="color:var(--on-surface-variant)">
+                    @(h.DefaultCurrency?.Title ?? "No default currency yet")
+                </MudText>
+            </div>
+            <MudSpacer />
+            <MudMenu Icon="@Icons.Material.Outlined.Settings" IconButton="true" aria-label="Household menu">
+                <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="() => OpenSettingsAsync()">Household settings</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Outlined.PersonAdd" OnClick="() => OpenInviteAsync()"
+                             Disabled="@(h.Parents.Count >= h.MaxParents)">Invite a parent</MudMenuItem>
+                @if (amIOwner)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Outlined.DeleteForever" OnClick="DeleteHouseholdAsync">
+                        Delete household
+                    </MudMenuItem>
+                }
+            </MudMenu>
+        </div>
+
+        @* Pending invitations *@
+        @if (h.PendingInvitations.Count > 0)
+        {
+            <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background:var(--surface-variant)">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Pending invitations</MudText>
+                @foreach (var inv in h.PendingInvitations)
+                {
+                    <div class="d-flex align-center">
+                        <MudText Typo="Typo.body2">@inv.Email</MudText>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small"
+                                       aria-label="@CancelLabel(inv.Email)"
+                                       OnClick="() => CancelInvitationAsync(inv.Id)" />
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @* Children grid *@
+        <div class="d-flex align-center mb-2 mt-4">
+            <MudText Typo="Typo.h5">Children</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Outlined.Add" OnClick="OpenAddChildAsync">Add child</MudButton>
+        </div>
+
+        @if (h.Children.Count == 0)
+        {
+            <div class="pm-empty">No children yet. Add your first child to get started.</div>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var child in h.Children)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Elevation="1" Class="pa-4 pm-child-card" @onclick="() => GoToChild(child.Id)">
+                            <div class="d-flex align-center">
+                                <MudAvatar Color="Color.Secondary">@child.DisplayName[..1].ToUpperInvariant()</MudAvatar>
+                                <div class="ml-3">
+                                    <MudText Typo="Typo.subtitle1">@child.DisplayName</MudText>
+                                    <MudText Typo="Typo.caption" Style="color:var(--on-surface-variant)">@child.AccountId</MudText>
+                                </div>
+                                <MudSpacer />
+                                @if (child.Locked)
+                                {
+                                    <LockBadge LockedUntil="@child.LockedUntil" Permanent="@(child.LockedUntil is null)" />
+                                }
+                            </div>
+                            <div class="mt-3 pm-child-balance">
+                                @MoneyFormat.Format(child.CurrentBalance, child.Currency)
+                                <span class="pm-child-currency">@child.Currency.Key</span>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudContainer>
+}
+
+@code {
+    private bool _loading = true;
+    private string _loadError = "";
+    private string? _myUid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (State.Current != AppState.SessionKind.Parent)
+        {
+            Nav.NavigateTo("/login/parent");
+            return;
+        }
+
+        State.StateChanged += OnStateChanged;
+
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) { Nav.NavigateTo("/login/parent"); return; }
+        _myUid = ChildTokenReader.ReadClaim(bearer, "sub");
+
+        try
+        {
+            // Auto-accept an invitation token carried through login (API Spec §3.6).
+            if (State.PendingInviteToken is { Length: > 0 } token)
+            {
+                State.PendingInviteToken = null;
+                try
+                {
+                    await Api.AcceptInvitationAsync(bearer, new AcceptInvitationRequest(token));
+                    Snackbar.Add("Invitation accepted — welcome!", Severity.Success);
+                }
+                catch (ApiException ex)
+                {
+                    Snackbar.Add(ex.Problem.Display, Severity.Warning);
+                }
+            }
+
+            await RefreshAsync(bearer);
+        }
+        catch (ApiException ex)
+        {
+            _loadError = ex.Problem.Display;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        // First-parent onboarding: no household name or no own PIN yet (FR-P3).
+        if (State.Household is { } h)
+        {
+            var me = h.Parents.FirstOrDefault(p => p.Id == _myUid)
+                     ?? h.Parents.FirstOrDefault(p => p.IsOwner);
+            var needsPin = me is { HasPin: false };
+            var needsSettings = h.DisplayName is null || h.DefaultCurrency is null;
+
+            if (needsSettings) await OpenSettingsAsync(firstRun: true);
+            if (needsPin) await OpenPinSetupAsync(firstRun: true);
+        }
+
+        // Start the inactivity lock timer once the dashboard is live (FR-P6).
+        await Inactivity.StartAsync();
+    }
+
+    private async Task RefreshAsync(string bearer)
+    {
+        var household = await Api.GetHouseholdAsync(bearer);
+        State.SetHousehold(household);
+    }
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void GoToChild(Guid childId) => Nav.NavigateTo($"/parent/children/{childId}");
+
+    private static string CancelLabel(string email) => $"Cancel invitation for {email}";
+
+    // ------------------------------------------------------------------
+    // Household settings dialog
+    // ------------------------------------------------------------------
+    private async Task OpenSettingsAsync(bool firstRun = false)
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["InitialName"] = State.Household?.DisplayName ?? "",
+            ["InitialCurrencyKey"] = State.Household?.DefaultCurrency?.Key ?? "USD",
+            ["FirstRun"] = firstRun,
+        };
+        var dialog = await Dialogs.ShowAsync<HouseholdSettingsDialog>("Household settings", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: HouseholdSettingsDialog.Result r })
+        {
+            try
+            {
+                await Api.UpdateHouseholdSettingsAsync(bearer,
+                    new UpdateHouseholdSettingsRequest(r.DisplayName, r.CurrencyKey));
+                Snackbar.Add("Settings saved.", Severity.Success);
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+        await RefreshAsync(bearer);
+    }
+
+    // ------------------------------------------------------------------
+    // Parent PIN setup dialog
+    // ------------------------------------------------------------------
+    private async Task OpenPinSetupAsync(bool firstRun = false)
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+
+        var parameters = new DialogParameters { ["FirstRun"] = firstRun };
+        var dialog = await Dialogs.ShowAsync<ParentPinSetupDialog>("Set your Parent PIN", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ParentPinSetupDialog.Result r })
+        {
+            try
+            {
+                await Api.SetParentPinAsync(bearer, new SetParentPinRequest(r.CurrentPin, r.NewPin));
+                Snackbar.Add("Parent PIN set.", Severity.Success);
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Invite parent
+    // ------------------------------------------------------------------
+    private async Task OpenInviteAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+
+        var dialog = await Dialogs.ShowAsync<InviteParentDialog>("Invite a parent");
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string email } && !string.IsNullOrWhiteSpace(email))
+        {
+            try
+            {
+                var inv = await Api.CreateInvitationAsync(bearer, new CreateInvitationRequest(email.Trim()));
+                Snackbar.Add($"Invitation sent to {email.Trim()}.", Severity.Success);
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+        await RefreshAsync(bearer);
+    }
+
+    private async Task CancelInvitationAsync(Guid invitationId)
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+        try
+        {
+            await Api.CancelInvitationAsync(bearer, invitationId);
+            await RefreshAsync(bearer);
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Problem.Display, Severity.Error);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Delete household (owner only)
+    // ------------------------------------------------------------------
+    private async Task DeleteHouseholdAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Delete this household?",
+            "This permanently removes the household, all children, and the full ledger. This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+        try
+        {
+            await Api.DeleteHouseholdAsync(bearer);
+            Snackbar.Add("Household deleted.", Severity.Success);
+            await State.LogoutAsync();
+            Nav.NavigateTo("/");
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Problem.Display, Severity.Error);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Add child
+    // ------------------------------------------------------------------
+    private async Task OpenAddChildAsync()
+    {
+        var bearer = await State.ParentTokenAsync();
+        if (bearer is null) return;
+
+        var dialog = await Dialogs.ShowAsync<AddChildDialog>("Add a child");
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string name } && !string.IsNullOrWhiteSpace(name))
+        {
+            try
+            {
+                var created = await Api.CreateChildAsync(bearer, new CreateChildRequest(name.Trim()));
+                Snackbar.Add($"{name.Trim()} added — Account ID: {created.AccountId}", Severity.Success);
+            }
+            catch (ApiException ex)
+            {
+                Snackbar.Add(ex.Problem.Display, Severity.Error);
+            }
+        }
+        await RefreshAsync(bearer);
+    }
+
+    public void Dispose()
+    {
+        State.StateChanged -= OnStateChanged;
+    }
+}

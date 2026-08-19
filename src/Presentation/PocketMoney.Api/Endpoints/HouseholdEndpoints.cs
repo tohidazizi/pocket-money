@@ -231,4 +231,3 @@ public static class HouseholdEndpoints
 }
 
 /// <summary>PUT /household/parents/me/pin body (API Spec §4.1).</summary>
-public sealed record SetParentPinRequest(string? CurrentPin, string? NewPin);

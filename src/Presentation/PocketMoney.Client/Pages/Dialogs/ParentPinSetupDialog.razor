@@ -1,0 +1,73 @@
+@* Parent PIN setup dialog (API Spec §4.1): current + new PIN via PIN pads.
+   First-parent onboarding passes currentPin = null (no PIN yet). *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            @if (FirstRun)
+            {
+                <text>Choose the 4-digit PIN you'll use to unlock the parent area after it locks itself from inactivity.</text>
+            }
+            else
+            {
+                <text>Enter your current PIN, then choose a new one.</text>
+            }
+        </MudText>
+
+        @if (!FirstRun)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Current PIN</MudText>
+            <PinPad @bind-Value="_current" Disabled="@_busy" />
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">New PIN</MudText>
+        <PinPad @bind-Value="_new" Disabled="@(_busy || (!FirstRun && _current.Length < 4))" />
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Repeat new PIN</MudText>
+        <PinPad @bind-Value="_confirm" Disabled="@(_busy || _new.Length < 4)" OnCompleted="SubmitAsync" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!FirstRun)
+        {
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+        }
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => SubmitAsync(string.Empty)" Disabled="@(!CanSubmit)">Save PIN</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public bool FirstRun { get; set; }
+
+    private string _current = "";
+    private string _new = "";
+    private string _confirm = "";
+    private string? _error;
+    private bool _busy;
+
+    public sealed record Result(string? CurrentPin, string NewPin);
+
+    private bool CanSubmit =>
+        _new.Length == 4 && _confirm.Length == 4 && (FirstRun || _current.Length == 4);
+
+    private async Task SubmitAsync(string _)
+    {
+        if (!CanSubmit) return;
+        if (_new != _confirm)
+        {
+            _error = "The new PINs don't match. Try again.";
+            _new = "";
+            _confirm = "";
+            return;
+        }
+        _busy = true;
+        MudDialog.Close(DialogResult.Ok(new Result(FirstRun ? null : _current, _new)));
+        await Task.CompletedTask;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

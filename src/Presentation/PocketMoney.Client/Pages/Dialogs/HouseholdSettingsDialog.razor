@@ -1,0 +1,45 @@
+@* Household settings dialog (UI Spec §7.3): name + default currency.
+   Currency list comes from the frozen CurrencyType registry (UI Spec §1.1). *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Household name" Variant="Variant.Outlined"
+                      HelperText="Shown at the top of the parent dashboard." />
+        <MudSelect @bind-Value="_currencyKey" Label="Default currency" Variant="Variant.Outlined" Class="mt-3">
+            @foreach (var currency in CurrencyType.Supported)
+            {
+                <MudSelectItem Value="@currency.Key">@($"{currency.Symbol} {currency.Key} — {currency.Title}")</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        @if (!FirstRun)
+        {
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+        }
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!CanSubmit)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string InitialName { get; set; } = "";
+    [Parameter] public string InitialCurrencyKey { get; set; } = "USD";
+    /// <summary>First-parent onboarding: no cancel — the settings are required.</summary>
+    [Parameter] public bool FirstRun { get; set; }
+
+    private string _name = "";
+    private string _currencyKey = "USD";
+
+    public sealed record Result(string DisplayName, string CurrencyKey);
+
+    private bool CanSubmit => _name.Trim().Length >= 2;
+
+    protected override void OnInitialized()
+    {
+        _name = InitialName;
+        _currencyKey = InitialCurrencyKey;
+    }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_name.Trim(), _currencyKey)));
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,49 @@
+@* Change-currency dialog (SDS §2.1.1): warns that the balance carries over
+   NUMERICALLY ($10.00 → €10.00), not by exchange rate. Ledger history keeps
+   its original denomination — only future rows use the new currency. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Style="color:var(--on-surface-variant)">
+            Balance carries over numerically — no exchange rate is applied.
+            Past ledger rows keep their original currency.
+        </MudText>
+
+        <MudSelect @bind-Value="_newKey" Label="New currency" Variant="Variant.Outlined" Class="mt-3">
+            @foreach (var currency in CurrencyType.Supported.Where(c => c.Key != CurrentKey))
+            {
+                <MudSelectItem Value="@currency.Key">@($"{currency.Symbol} {currency.Key} — {currency.Title}")</MudSelectItem>
+            }
+        </MudSelect>
+
+        @if (_newKey is not null)
+        {
+            var target = CurrencyType.Parse(_newKey);
+            if (target is not null)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                    @ChildName's balance becomes @MoneyFormat.Format(CurrentBalance, CurrencyDto.From(target))
+                    (was @MoneyFormat.Format(CurrentBalance, CurrentCurrency)).
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm" Disabled="@(_newKey is null)">
+            Change currency
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string ChildName { get; set; } = "";
+    [Parameter] public string CurrentKey { get; set; } = "";
+    [Parameter] public decimal CurrentBalance { get; set; }
+    [Parameter] public CurrencyDto CurrentCurrency { get; set; } = default!;
+
+    private string? _newKey;
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(_newKey));
+    private void Cancel() => MudDialog.Cancel();
+}
