@@ -1,10 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using PocketMoney.Application.Contract;
 using PocketMoney.Global;
+using PocketMoney.Persistence.Data;
 
 namespace PocketMoney.Application;
 
@@ -54,5 +56,25 @@ public sealed class ChildJwtTokenIssuer : IChildTokenIssuer
             signingCredentials: new SigningCredentials(_key, SecurityAlgorithms.HmacSha256));
 
         return new ChildToken(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+
+    /// <summary>
+    /// SDS §3.2: the child JWT's `security_stamp` claim must match the DB
+    /// record — rotated on PIN reset / manual lock / unlock. A stale stamp
+    /// means the session was revoked; the device must re-authenticate.
+    /// Also rejects tokens whose child no longer exists (household deleted).
+    /// </summary>
+    public static async Task<bool> ValidateSecurityStampAsync(
+        ClaimsPrincipal principal, PocketMoneyDbContext db)
+    {
+        if (!Guid.TryParse(principal.FindFirst(ClaimChildId)?.Value, out var childId))
+            return false;
+        if (!Guid.TryParse(principal.FindFirst(ClaimSecurityStamp)?.Value, out var stamp))
+            return false;
+
+        var child = await db.Children.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == childId);
+
+        return child is not null && child.SecurityStamp == stamp;
     }
 }

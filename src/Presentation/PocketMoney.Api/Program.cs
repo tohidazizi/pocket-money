@@ -31,6 +31,7 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IHouseholdService, HouseholdService>();
 builder.Services.AddScoped<IInvitationService, InvitationService>();
 builder.Services.AddScoped<IInvitationEmailDispatcher, LoggingInvitationEmailDispatcher>();
+builder.Services.AddScoped<IChildService, ChildService>();
 
 // --- Authentication: two bearer schemes (API Spec §1.2) ---
 // Firebase scheme = parent JWTs (public JWKS verification, projectId only).
@@ -55,6 +56,24 @@ builder.Services
             ClockSkew = TimeSpan.Zero, // 365-day tokens: no slack needed
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateIssuerSigningKey = true,
+        };
+
+        // SDS §3.2 layer 3: 365-day tokens are revocable ONLY because the
+        // stamp is checked against the DB on every request. Mismatch (PIN
+        // reset / manual lock-unlock / missing child) → 401 with code
+        // security_stamp_mismatch (rendered by the shared challenge handler),
+        // forcing the child device to re-login.
+        options.Events.OnTokenValidated = async ctx =>
+        {
+            var db = ctx.HttpContext.RequestServices
+                .GetRequiredService<PocketMoneyDbContext>();
+            if (!await ChildJwtTokenIssuer.ValidateSecurityStampAsync(ctx.Principal!, db))
+            {
+                // Pin the code for the shared challenge handler (SDS §3.2).
+                ctx.HttpContext.Items[PocketMoney.Authentication.AuthContextKeys.ErrorCode] =
+                    PocketMoney.Authentication.AuthErrorCodes.SecurityStampMismatch;
+                ctx.Fail("security_stamp_mismatch");
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -106,6 +125,7 @@ app.MapGet("/healthz", async (PocketMoneyDbContext db, CancellationToken ct) =>
 var api = app.MapGroup("/api/v1");
 api.MapChildLogin();
 api.MapHousehold();
+api.MapChildMe();
 
 app.Run();
 

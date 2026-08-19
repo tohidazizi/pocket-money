@@ -10,6 +10,17 @@ public static class AuthErrorCodes
 {
     public const string TokenInvalid = "token_invalid";
     public const string TokenExpired = "token_expired";
+    public const string SecurityStampMismatch = "security_stamp_mismatch";
+}
+
+/// <summary>
+/// HttpContext item a token-validation event can set to pin the exact error
+/// code the challenge response should carry. Deterministic — does not depend
+/// on how the handler propagates Fail() messages into ErrorDescription.
+/// </summary>
+public static class AuthContextKeys
+{
+    public const string ErrorCode = "PocketMoney.AuthErrorCode";
 }
 
 /// <summary>
@@ -27,19 +38,29 @@ public static class JwtBearerChallenge
         {
             context.HandleResponse();
 
-            var expired = context.ErrorDescription?.Contains("expired", StringComparison.OrdinalIgnoreCase) is true
-                || context.ErrorDescription?.Contains("lifetime", StringComparison.OrdinalIgnoreCase) is true;
+            // Validation events pin the exact code via HttpContext items
+            // (deterministic); fall back to inspecting the failure message.
+            var pinnedCode = context.HttpContext.Items[AuthContextKeys.ErrorCode] as string;
+            var stampMismatch = pinnedCode == AuthErrorCodes.SecurityStampMismatch
+                || context.ErrorDescription?.Contains("security_stamp_mismatch", StringComparison.OrdinalIgnoreCase) is true;
+            var expired = !stampMismatch && context.ErrorDescription?.Contains("expired", StringComparison.OrdinalIgnoreCase) is true;
 
             var problem = new ProblemDetails
             {
-                Type = "https://pocketmoney.app/errors/token-invalid",
+                Type = stampMismatch
+                    ? "https://pocketmoney.app/errors/security-stamp-mismatch"
+                    : "https://pocketmoney.app/errors/token-invalid",
                 Status = StatusCodes.Status401Unauthorized,
-                Title = expired ? "Token expired" : "Unauthorized",
-                Detail = expired
-                    ? "The bearer token has expired."
-                    : "The bearer token is missing or invalid.",
+                Title = stampMismatch ? "Session expired" : expired ? "Token expired" : "Unauthorized",
+                Detail = stampMismatch
+                    ? "This session is no longer valid. Please sign in again."
+                    : expired
+                        ? "The bearer token has expired."
+                        : "The bearer token is missing or invalid.",
             };
-            problem.Extensions["code"] = expired ? AuthErrorCodes.TokenExpired : AuthErrorCodes.TokenInvalid;
+            problem.Extensions["code"] = stampMismatch
+                ? "security_stamp_mismatch"
+                : expired ? AuthErrorCodes.TokenExpired : AuthErrorCodes.TokenInvalid;
 
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/problem+json";

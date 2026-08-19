@@ -36,6 +36,9 @@ public static class HouseholdEndpoints
         var group = app.MapGroup("/household")
             .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = FirebaseAuthDefaults.Scheme });
 
+        // Parent-side child management (API Spec §5.1–5.4)
+        group.MapChildren();
+
         // GET /household — doubles as Auto-Registration (SDS §7.1.2)
         group.MapGet("/", async (HttpContext http, IHouseholdService households, CancellationToken ct) =>
         {
