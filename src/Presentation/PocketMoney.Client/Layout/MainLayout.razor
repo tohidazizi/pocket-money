@@ -7,15 +7,10 @@
     <MudAppBar Elevation="0" Fixed="true">
         <MudText Typo="Typo.h5" Class="font-weight-bold">Pocket Money</MudText>
         <MudSpacer />
-        @if (State.Current == AppState.SessionKind.Parent)
+        @if (State.Current != AppState.SessionKind.None)
         {
             <MudIconButton Icon="@Icons.Material.Outlined.Logout" Color="Color.Default"
-                           OnClick="LogoutAsync" Title="Log out" />
-        }
-        @if (State.Current == AppState.SessionKind.Child)
-        {
-            <MudIconButton Icon="@Icons.Material.Outlined.Logout" Color="Color.Default"
-                           OnClick="LogoutAsync" Title="Log out" />
+                           OnClick="LogoutAsync" aria-label="Log out" />
         }
     </MudAppBar>
 

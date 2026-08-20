@@ -11,6 +11,8 @@ public sealed class LedgerHubService : IAsyncDisposable
     private readonly ApiEndpoints _endpoints;
     private HubConnection? _connection;
 
+    public LedgerHubService(ApiEndpoints endpoints) => _endpoints = endpoints;
+
     /// <summary>(newBalance, transactionJson) after a committed CREDIT/DEBIT.</summary>
     public event Action<decimal, string>? OnBalanceUpdated;
 

@@ -34,7 +34,7 @@ else
                 </MudText>
             </div>
             <MudSpacer />
-            <MudMenu Icon="@Icons.Material.Outlined.Settings" IconButton="true" aria-label="Household menu">
+            <MudMenu Icon="@Icons.Material.Outlined.Settings" AriaLabel="Household menu">
                 <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="() => OpenSettingsAsync()">Household settings</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Outlined.PersonAdd" OnClick="() => OpenInviteAsync()"
                              Disabled="@(h.Parents.Count >= h.MaxParents)">Invite a parent</MudMenuItem>
