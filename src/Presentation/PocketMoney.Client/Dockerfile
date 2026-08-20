@@ -19,12 +19,13 @@ RUN dotnet publish "src/Presentation/PocketMoney.Client/PocketMoney.Client.cspro
 
 FROM nginx:1.27-alpine AS runtime
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
-COPY deploy/nginx/client.conf /etc/nginx/conf.d/default.conf
+COPY deploy/nginx/client.conf.template /etc/nginx/templates/client.conf.template
 COPY deploy/nginx/pm-config.template.json /usr/share/nginx/html/pm-config.json.template
 
-# Envsubst pm-config.json at boot: the Blazor client fetches it before
-# resolving the API base (ApiEndpoints.LoadAsync).
+# Railway assigns a dynamic $PORT; envsubst renders both the nginx listen
+# port and the Blazor runtime config at container start.
 ENV PM_API_BASE=http://localhost:5199
-CMD ["/bin/sh", "-c", "envsubst '$PM_API_BASE' < /usr/share/nginx/html/pm-config.json.template > /usr/share/nginx/html/pm-config.json && nginx -g 'daemon off;'"]
+ENV PORT=80
+CMD ["/bin/sh", "-c", "envsubst '$PM_API_BASE' < /usr/share/nginx/html/pm-config.json.template > /usr/share/nginx/html/pm-config.json && envsubst '$PORT' < /etc/nginx/templates/client.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
 
 EXPOSE 80
