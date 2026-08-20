@@ -28,7 +28,9 @@ COPY --from=build /app/publish .
 RUN adduser --disabled-password --gecos "" app
 USER app
 
-ENV ASPNETCORE_URLS=http://+:8080
+# Railway assigns a dynamic $PORT per deployment; respect it instead of
+# hardcoding. Local docker runs get a sane default.
+ENV ASPNETCORE_URLS=
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "PocketMoney.Api.dll"]
+CMD ["sh", "-c", "ASPNETCORE_URLS=http://+:${PORT:-8080} exec dotnet PocketMoney.Api.dll"]

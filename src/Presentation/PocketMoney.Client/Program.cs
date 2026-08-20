@@ -9,16 +9,20 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // --- Services (SDS §1.3 client) ---
-builder.Services.AddScoped(sp => new HttpClient
+var http = new HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
     Timeout = TimeSpan.FromSeconds(60),
-});
+};
+builder.Services.AddScoped(_ => http);
 
-var endpoints = new ApiEndpoints();
+// Runtime API base resolution (Railway deployment): pm-config.json is
+// served next to the client bundle and can be rewritten per environment
+// without rebuilding. On any failure we fall back to the dev default
+// (localhost:5199) so a missing config never breaks local development.
+var endpoints = await ApiEndpoints.LoadAsync(http);
 builder.Services.AddSingleton(endpoints);
-builder.Services.AddScoped(sp => new PocketMoneyApiClient(
-    sp.GetRequiredService<HttpClient>(), endpoints));
+builder.Services.AddScoped(sp => new PocketMoneyApiClient(http, endpoints));
 
 builder.Services.AddScoped<SessionStore>();
 builder.Services.AddScoped<ChildrenHistoryStore>();
