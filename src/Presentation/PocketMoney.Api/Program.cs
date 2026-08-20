@@ -93,10 +93,18 @@ builder.Services.AddOpenApi();
 
 // --- Forwarded headers: Railway sits behind a proxy; the IP-ban ladder
 // must see real client IPs (CI/CD doc §4.4, SDS §10.2) ---
+// VERIFIED IN PROD (Phase 6 acceptance): the request chain is
+// client -> Railway edge proxy -> app, so X-Forwarded-For carries TWO
+// entries ("realIp, edgeProxyIp"). The default ForwardLimit=1 stops one
+// hop short and the ban ladder keyed on the Railway edge IP — every user
+// would share one ban bucket. ForwardLimit=2 walks the full chain to the
+// real client IP. Railway controls the header, so spoofed prefixes are
+// not a concern (railway.com station: "our proxy controls this header").
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.ForwardLimit = 2;
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
