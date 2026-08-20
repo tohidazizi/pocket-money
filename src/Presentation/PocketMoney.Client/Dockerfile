@@ -9,7 +9,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY PocketMoney.slnx ./
-COPY src/Cross src/Cross
+COPY ["src/Cross Layer", "src/Cross Layer/"]
 COPY src/Domain src/Domain
 COPY src/Application src/Application
 COPY src/Presentation src/Presentation
